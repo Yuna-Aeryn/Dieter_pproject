@@ -7,6 +7,7 @@ const app = express();
 const port = 3001;
 
 // --- Security & Middleware ---
+// Ideally, use environment variables for the origin in production
 app.use(cors({ origin: 'http://localhost:5173' })); 
 app.use(express.json({ limit: '10mb' }));
 
@@ -37,7 +38,8 @@ app.post('/analyze-image', async (req, res) => {
       },
     };
     
-    const prompt = "Analyze this food item and return ONLY a valid JSON object with foodName, calories, and a nutrients object (protein, fat, carbohydrates).";
+    // Prompt asks for 6 nutrients
+    const prompt = "Analyze this food item and return ONLY a valid JSON object with foodName, calories, and a nutrients object containing: protein (g), fat (g), carbohydrates (g), sugar (g), and sodium (mg).";
     
     const result = await model.generateContent([prompt, imagePart]);
     const response = result.response;
@@ -53,36 +55,21 @@ app.post('/analyze-image', async (req, res) => {
     try {
       const markdownMatch = text.match(/```json([\s\S]*)```/);
       if (markdownMatch && markdownMatch[1]) {
-        console.log('Found markdown JSON block, parsing...');
         jsonText = markdownMatch[1];
       } else {
         const rawJsonMatch = text.match(/\{[\s\S]*\}/);
         if (rawJsonMatch && rawJsonMatch[0]) {
-          console.log('Found raw JSON object, parsing...');
           jsonText = rawJsonMatch[0];
         } else {
-          console.log('No JSON of any kind found in response.');
           throw new Error('Gemini API returned non-JSON response.');
         }
       }
       
-      console.log('--- Attempting to parse the following text as JSON: ---');
-      console.log(jsonText);
-      console.log('--- End of text to parse ---');
-      
       const cleanedJsonText = jsonText.replace(/[^\S \t\r\n\f\v{}[\]":,0-9.truefalsenull-]/g, '');
-
-      console.log('--- Attempting to parse CLEANED text: ---');
-      console.log(cleanedJsonText);
-      console.log('--- End of cleaned text ---');
-      
       jsonData = JSON.parse(cleanedJsonText);
 
     } catch (parseError) {
-      console.error('Failed to parse JSON from response:', parseError);
-      console.error('--- Cleaned text that failed to parse: ---');
-      console.error(cleanedJsonText);
-      console.error('--- End of failed cleaned text ---');
+      console.error('Failed to parse JSON:', parseError);
       return res.status(500).json({ error: 'Gemini API returned malformed JSON.', details: text });
     }
 
@@ -94,8 +81,38 @@ app.post('/analyze-image', async (req, res) => {
   }
 });
 
-// --- REMOVED: /get-recommendation endpoint ---
+// --- API Endpoint: /get-recommendation ---
+// SIMPLIFIED: No longer accepts or uses userProfile
+app.post('/get-recommendation', async (req, res) => {
+  try {
+    const { foodList, totals, rda } = req.body;
 
+    const userQuery =
+      foodList.length > 0
+        ? `Today I have eaten: ${foodList}. My daily targets are: ${rda.calories} kcal, ${rda.protein}g Protein, ${rda.carbohydrates}g Carbs, ${rda.fat}g Fat, ${rda.sugar}g Sugar, ${rda.sodium}mg Sodium. My current totals are: ${totals.calories} kcal, ${totals.protein}g Protein, ${totals.carbohydrates}g Carbs, ${totals.fat}g Fat, ${totals.sugar}g Sugar, ${totals.sodium}mg Sodium. What specific food should I eat next to balance this?`
+        : `I haven't eaten anything yet today. My daily target is ${rda.calories} kcal. Recommend a balanced first meal.`;
+
+    const systemPrompt =
+      "You are a helpful nutrition coach. Provide a short (2-3 sentences) recommendation. Do NOT list the numbers back to the user; just give advice.";
+    
+    const fullPrompt = `${systemPrompt}\n\nUser query: ${userQuery}`;
+
+    // Using generateContent for simpler text generation
+    const result = await model.generateContent(fullPrompt);
+    const response = result.response;
+    const text = response.text();
+
+    console.log('--- Raw text from Gemini (Recommendation) ---');
+    console.log(text);
+    console.log('--- End raw text (Recommendation) ---');
+
+    res.status(200).json({ recommendation: text });
+
+  } catch (error) {
+    console.error('Error in /get-recommendation:', error);
+    res.status(500).json({ error: 'Failed to get recommendation' });
+  }
+});
 
 app.listen(port, () => {
   console.log(`Dieter backend listening on http://localhost:${port}`);
