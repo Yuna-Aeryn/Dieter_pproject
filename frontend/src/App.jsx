@@ -4,8 +4,9 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth,
-  signInAnonymously,
-  signInWithCustomToken,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
   onAuthStateChanged,
 } from 'firebase/auth';
 import {
@@ -33,10 +34,6 @@ const firebaseConfig = {
 };
 
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'dieter-app';
-const initialAuthToken =
-  typeof __initial_auth_token !== 'undefined'
-    ? __initial_auth_token
-    : null;
 
 // --- Firebase Initialization ---
 let app, auth, db;
@@ -50,14 +47,13 @@ try {
 }
 
 // --- STANDARD Recommended Daily Allowances (RDAs) ---
-// No longer dynamic, applies to everyone
 const STANDARD_RDA = {
   calories: 2000,
-  protein: 50, // grams
-  fat: 78, // grams
-  carbohydrates: 275, // grams
-  sodium: 2300, // mg
-  sugar: 50, // grams (guideline)
+  protein: 50,
+  fat: 78,
+  carbohydrates: 275,
+  sodium: 2300,
+  sugar: 50,
 };
 
 // --- Helper Components ---
@@ -87,6 +83,86 @@ const Modal = ({ title, message, onClose }) => (
     </div>
   </div>
 );
+
+// --- SEPARATE LOGIN SCREEN ---
+const LoginScreen = ({ onLogin, onSignup, error }) => {
+  const [isSignup, setIsSignup] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (isSignup) {
+      onSignup(email, password);
+    } else {
+      onLogin(email, password);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 p-4 font-inter">
+      <div className="max-w-md w-full bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">Dieter</h1>
+          <p className="text-gray-400">Your AI-powered nutrition companion.</p>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded text-red-200 text-sm">
+            {error}
+          </div>
+        )}
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Email Address</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              placeholder="you@example.com"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Password</label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 mt-6"
+          >
+            {isSignup ? 'Create Account' : 'Sign In'}
+          </button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-400">
+            {isSignup ? "Already have an account? " : "Don't have an account? "}
+            <button
+              onClick={() => { setIsSignup(!isSignup); setEmail(''); setPassword(''); }}
+              className="text-blue-400 hover:text-blue-300 font-medium hover:underline focus:outline-none"
+            >
+              {isSignup ? 'Sign In' : 'Sign Up'}
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- DASHBOARD COMPONENTS ---
 
 const ImageUploader = ({ onImageUpload, isLoading }) => {
   const [dragOver, setDragOver] = useState(false);
@@ -119,9 +195,7 @@ const ImageUploader = ({ onImageUpload, isLoading }) => {
   );
 };
 
-// --- UPDATED: DailySummary with 6 Nutrients ---
 const DailySummary = ({ totals }) => {
-  // Using STANDARD_RDA directly
   const summaryItems = [
     { name: 'Calories', value: totals.calories, rda: STANDARD_RDA.calories, unit: 'kcal' },
     { name: 'Protein', value: totals.protein, rda: STANDARD_RDA.protein, unit: 'g' },
@@ -196,44 +270,70 @@ const FoodList = ({ foodEntries }) => (
   </div>
 );
 
+// --- MAIN APP ---
 export default function App() {
-  const [userId, setUserId] = useState(null);
+  const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [foodEntries, setFoodEntries] = useState([]);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [error, setError] = useState(null);
+  const [authError, setAuthError] = useState(null); 
   
-  // --- REMOVED: Profile State ---
-  // --- REMOVED: Dynamic RDA State ---
-
   const [recommendation, setRecommendation] = useState('');
   const [isLoadingRec, setIsLoadingRec] = useState(false);
   const recommendationTimerRef = useRef(null);
 
-  // Auth
+  // --- Auth Logic ---
   useEffect(() => {
     if (!auth) return;
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) { setUserId(user.uid); setIsAuthReady(true); }
-      else {
-        try { if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken); else await signInAnonymously(auth); }
-        catch (e) { setError(`Auth failed: ${e.message}`); }
-      }
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsAuthReady(true);
     });
     return () => unsubscribe();
   }, []);
 
-  // Data
+  const handleLogin = async (email, password) => {
+    setAuthError(null);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      setAuthError("Invalid email or password.");
+      console.error(err);
+    }
+  };
+
+  const handleSignup = async (email, password) => {
+    setAuthError(null);
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      setAuthError(err.message.replace('Firebase: ', '')); // Clean up error message
+      console.error(err);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setFoodEntries([]); 
+      setRecommendation('');
+    } catch (err) {
+      setError("Logout failed: " + err.message);
+    }
+  };
+
+  // Data Fetching
   useEffect(() => {
-    if (!isAuthReady || !userId || !db) return;
+    if (!isAuthReady || !user || !db) return; 
     const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
-    const q = query(collection(db, `artifacts/${appId}/users/${userId}/foodEntries`), where('timestamp', '>=', Timestamp.fromDate(startOfToday)));
+    const q = query(collection(db, `artifacts/${appId}/users/${user.uid}/foodEntries`), where('timestamp', '>=', Timestamp.fromDate(startOfToday)));
     return onSnapshot(q, (snapshot) => {
       const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       entries.sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
       setFoodEntries(entries);
     });
-  }, [isAuthReady, userId]);
+  }, [isAuthReady, user]); 
 
   // Totals
   const dailyTotals = useMemo(() => {
@@ -258,15 +358,15 @@ export default function App() {
       reader.readAsDataURL(file);
       reader.onload = async () => {
         const base64ImageData = reader.result.split(',')[1];
-        // Use localhost for local dev
+        // LOCAL DEVELOPMENT MODE: Pointing to localhost
         const response = await fetch('http://localhost:3001/analyze-image', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64: base64ImageData, mimeType: file.type }),
         });
         if (!response.ok) throw new Error('Backend failed');
         const foodData = await response.json();
-        if (db && userId) {
-          await addDoc(collection(db, `artifacts/${appId}/users/${userId}/foodEntries`), { ...foodData, timestamp: Timestamp.now() });
+        if (db && user) {
+          await addDoc(collection(db, `artifacts/${appId}/users/${user.uid}/foodEntries`), { ...foodData, timestamp: Timestamp.now() });
         }
       };
     } catch (err) { setError(err.message); } finally { setIsLoadingImage(false); }
@@ -274,11 +374,11 @@ export default function App() {
 
   // Reset
   const handleReset = async () => {
-    if (!db || !userId) return;
+    if (!db || !user) return;
     if (!confirm("Reset all data?")) return;
     try {
       const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
-      const q = query(collection(db, `artifacts/${appId}/users/${userId}/foodEntries`), where('timestamp', '>=', Timestamp.fromDate(startOfToday)));
+      const q = query(collection(db, `artifacts/${appId}/users/${user.uid}/foodEntries`), where('timestamp', '>=', Timestamp.fromDate(startOfToday)));
       const snapshot = await getDocs(q);
       const batch = writeBatch(db);
       snapshot.docs.forEach((doc) => { batch.delete(doc.ref); });
@@ -294,13 +394,13 @@ export default function App() {
     try {
       const foodListString = foodEntries.map(f => `${f.foodName} (${f.calories}kcal)`).join(', ');
       
-      // Use localhost for local dev
+      // LOCAL DEVELOPMENT MODE: Pointing to localhost
       const response = await fetch('http://localhost:3001/get-recommendation', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           foodList: foodListString, 
           totals: dailyTotals, 
-          rda: STANDARD_RDA // Send standard RDA
+          rda: STANDARD_RDA 
         }),
       });
       
@@ -310,31 +410,40 @@ export default function App() {
     } catch (err) { console.error(err); } finally { setIsLoadingRec(false); }
   };
 
-  // Auto-trigger recommendation when totals changes
+  // Auto-trigger
   useEffect(() => {
-    if (!isAuthReady || !userId) return;
+    if (!isAuthReady || !user) return;
     if (recommendationTimerRef.current) clearTimeout(recommendationTimerRef.current);
     
-    // Trigger if food has been added
     if (foodEntries.length > 0) {
         setIsLoadingRec(true);
         recommendationTimerRef.current = setTimeout(() => handleGetRecommendation(), 3000);
     }
     return () => clearTimeout(recommendationTimerRef.current);
-  }, [dailyTotals, isAuthReady, userId]);
+  }, [dailyTotals, isAuthReady, user]);
 
   if (!isAuthReady) return <div className="flex justify-center items-center h-screen bg-gray-900"><LoadingSpinner /></div>;
 
+  // --- NEW: Conditional Rendering for Login ---
+  if (!user) {
+    return <LoginScreen onLogin={handleLogin} onSignup={handleSignup} error={authError} />;
+  }
+
+  // --- Dashboard (Only shown if user is logged in) ---
   return (
     <div className="min-h-screen bg-gray-900 p-4 sm:p-8 font-inter text-gray-200">
       {error && <Modal title="Error" message={error} onClose={() => setError(null)} />}
       <main className="max-w-2xl mx-auto space-y-6">
         <header className="text-center py-4 flex justify-between items-center">
-          <h1 className="text-4xl font-bold text-white">Dieter</h1>
-          <button onClick={handleReset} className="text-xs text-red-400 hover:text-red-300 border border-red-500 px-2 py-1 rounded">Reset</button>
+          <div className="text-left">
+            <h1 className="text-4xl font-bold text-white">Dieter</h1>
+            <p className="text-xs text-gray-500 mt-1">Hello, {user.email}</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleReset} className="text-xs text-red-400 hover:text-red-300 border border-red-500 px-2 py-1 rounded">Reset</button>
+            <button onClick={handleLogout} className="text-xs text-gray-400 hover:text-gray-300 border border-gray-500 px-2 py-1 rounded">Logout</button>
+          </div>
         </header>
-
-        {/* --- REMOVED: Profile Component --- */}
 
         <ImageUploader onImageUpload={handleImageUpload} isLoading={isLoadingImage} />
         
