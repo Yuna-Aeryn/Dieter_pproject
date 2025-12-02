@@ -67,7 +67,7 @@ const MyPage = ({ user, userProfile, onUpdateProfile, onLogout, onReset }) => {
                 {/* 1-4. 저장 버튼 (민트색) */}
                 <button 
                   onClick={handleSave}
-                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md mt-2"
+                  className="w-full bg-teal-600 hover:bg-teal-700 text-teal-600 font-bold py-3 rounded-lg transition-colors shadow-md mt-2"
                 >
                   사용자 정보 저장
                 </button>

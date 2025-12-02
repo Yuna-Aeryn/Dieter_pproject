@@ -84,7 +84,7 @@ const Modal = ({ title, message, onClose }) => (
         <div className="mt-4">
           <button
             type="button"
-            className="inline-flex justify-center rounded-md border border-transparent bg-teal-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-700"
+            className="inline-flex justify-center rounded-md border border-transparent bg-teal-600 px-4 py-2 text-sm font-medium text-teal-600 shadow-sm hover:bg-teal-700"
             onClick={onClose}
           >
             닫기
@@ -458,7 +458,7 @@ export default function App() {
                   <button
                       onClick={handleGetRecommendation}
                       disabled={isLoadingRec}
-                      className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md mt-6 disabled:opacity-50"
+                      className="w-full bg-teal-600 hover:bg-teal-700 text-teal-600 font-bold py-3 rounded-lg transition-colors shadow-md mt-6 disabled:opacity-50"
                   >
                       {isLoadingRec ? '분석 중...' : '맞춤 메뉴 추천받기'}
                   </button>
