@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 
-// 분리된 컴포넌트 import (These files must exist in your src folder)
+// 분리된 컴포넌트 import
 import Login from './Login'; 
 import MyPage from './MyPage'; 
 import Manager from './Manager'; 
@@ -158,11 +158,11 @@ const FoodList = ({ foodEntries }) => (
               </div>
               <div className="text-xs text-gray-600 grid grid-cols-3 gap-2">
                 <span>{entry.calories?.toFixed(0)} kcal</span>
-                <span>단백질: {entry.nutrients?.protein?.toFixed(0)}g</span>
-                <span>탄수화물: {entry.nutrients?.carbohydrates?.toFixed(0)}g</span>
-                <span>지방: {entry.nutrients?.fat?.toFixed(0)}g</span>
-                <span>당류: {entry.nutrients?.sugar?.toFixed(0)}g</span>
-                <span>나트륨: {entry.nutrients?.sodium?.toFixed(0)}mg</span>
+                <span>P: {entry.nutrients?.protein?.toFixed(0)}g</span>
+                <span>C: {entry.nutrients?.carbohydrates?.toFixed(0)}g</span>
+                <span>F: {entry.nutrients?.fat?.toFixed(0)}g</span>
+                <span>Sug: {entry.nutrients?.sugar?.toFixed(0)}g</span>
+                <span>Sod: {entry.nutrients?.sodium?.toFixed(0)}mg</span>
               </div>
             </div>
           ))}
@@ -351,8 +351,10 @@ export default function App() {
     } catch (err) { setError("초기화 실패: " + err.message); }
   };
 
+  // --- 🚀 FIXED: Removed the blocking 'if (isLoadingRec) return;' check ---
   const handleGetRecommendation = async () => {
-    if (isLoadingRec) return;
+    // 🛑 이전에 있던 'if (isLoadingRec) return;' 코드를 제거했습니다.
+    // useEffect에서 이미 isLoadingRec(true)를 설정하므로 이 체크가 있으면 항상 함수가 멈추게 됩니다.
     setIsLoadingRec(true);
     setRecommendation(null); 
     try {
@@ -390,6 +392,7 @@ export default function App() {
     // Only auto-trigger if there is food logged
     if (foodEntries.length > 0) {
         setIsLoadingRec(true);
+        // 타이머 활성화 (3초 뒤 실행)
         recommendationTimerRef.current = setTimeout(() => handleGetRecommendation(), 3000);
     }
     return () => clearTimeout(recommendationTimerRef.current);
@@ -548,8 +551,13 @@ export default function App() {
             ))}
           </nav>
 
-          {/* --- 로그아웃 버튼 제거 --- */}
-          <div className="w-16"></div> 
+          {/* --- 로그아웃 버튼 복원 --- */}
+          <button 
+            onClick={handleLogout} 
+            className="mx-4 text-sm text-gray-500 hover:text-red-600 transition-colors duration-150 py-1 px-3 border border-gray-300 rounded-lg"
+          >
+            로그아웃
+          </button>
         </div>
       </header>
 
