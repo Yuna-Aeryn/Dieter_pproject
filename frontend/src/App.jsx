@@ -1,24 +1,34 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+
+// 분리된 컴포넌트 import
+import Login from './Login'; 
+import MyPage from './MyPage'; 
+import Manager from './Manager'; 
 
 // Firebase Imports
 import { initializeApp } from 'firebase/app';
 import {
   getAuth,
-  signInAnonymously,
-  signInWithCustomToken,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
   onAuthStateChanged,
 } from 'firebase/auth';
 import {
   getFirestore,
   doc,
   addDoc,
+  writeBatch,
   collection,
   query,
   where,
+  getDocs,
   onSnapshot,
   Timestamp,
   setLogLevel,
-} from 'firebase/firestore';
+}
+  from 'firebase/firestore';
+
 
 // --- Global Firebase & App Config ---
 const firebaseConfig = {
@@ -31,10 +41,9 @@ const firebaseConfig = {
 };
 
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'dieter-app';
-const initialAuthToken =
-  typeof __initial_auth_token !== 'undefined'
-    ? __initial_auth_token
-    : null;
+
+// --- 관리자 정보 설정 ---
+const ADMIN_EMAIL = 'admin@dieter.com';
 
 // --- Firebase Initialization ---
 let app, auth, db;
@@ -47,453 +56,499 @@ try {
   console.error('Firebase initialization error:', e);
 }
 
-// --- Recommended Daily Allowances (RDAs) ---
-const RDA = {
-  calories: 2000,
-  protein: 50, // grams
-  fat: 78, // grams
-  carbohydrates: 275, // grams
-};
+// --- Helper Components ---
 
-// --- Helper Components (Dark Mode) ---
-
-/**
- * A simple loading spinner component.
- */
 const LoadingSpinner = () => (
-  <div className="flex justify-center items-center">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
-  </div>
-);
-
-/**
- * A modal component for displaying errors or messages.
- */
-const Modal = ({ title, message, onClose }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 transition-opacity duration-300">
-    <div className="bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-100 opacity-100 border border-gray-700">
-      <h3 className="text-lg font-medium leading-6 text-white">{title}</h3>
-      <div className="mt-2">
-        <p className="text-sm text-gray-400">{message}</p>
-      </div>
-      <div className="mt-4">
-        <button
-          type="button"
-          className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
-          onClick={onClose}
-        >
-          Close
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
-/**
- * Component for uploading an image.
- */
-const ImageUploader = ({ onImageUpload, isLoading }) => {
-  const [dragOver, setDragOver] = useState(false);
-
-  const handleFileChange = (e) => {
-    const file = e.target.files ? e.target.files[0] : null;
-    if (file) {
-      onImageUpload(file);
-    }
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragOver(false);
-    const file = e.dataTransfer.files ? e.dataTransfer.files[0] : null;
-    if (file && file.type.startsWith('image/')) {
-      onImageUpload(file);
-    }
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragOver(true);
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragOver(false);
-  };
-
-  return (
-    <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
-      <h2 className="text-xl font-semibold text-white mb-4">
-        Add Food Item
-      </h2>
-      <label
-        htmlFor="file-upload"
-        className={`flex justify-center w-full h-48 px-6 pt-5 pb-6 border-2 border-gray-600 border-dashed rounded-lg cursor-pointer transition-colors duration-200 ${
-          dragOver ? 'border-blue-500 bg-gray-700' : 'hover:border-gray-500'
-        }`}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-      >
-        <div className="space-y-1 text-center">
-          <svg
-            className="mx-auto h-12 w-12 text-gray-500"
-            stroke="currentColor"
-            fill="none"
-            viewBox="0 0 48 48"
-            aria-hidden="true"
-          >
-            <path
-              d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <div className="flex text-sm text-gray-400">
-            <span className="relative font-medium text-blue-400 hover:text-blue-300">
-              Upload a photo
-            </span>
-            <input
-              id="file-upload"
-              name="file-upload"
-              type="file"
-              className="sr-only"
-              accept="image/*"
-              onChange={handleFileChange}
-              disabled={isLoading}
-            />
-            <p className="pl-1">or drag and drop</p>
-          </div>
-          <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
-        </div>
-      </label>
-      {isLoading && (
-        <div className="mt-4">
-          <LoadingSpinner />
-          <p className="text-center text-sm text-gray-400 mt-2">
-            Analyzing your food...
-          </p>
-        </div>
-      )}
+    <div className="flex justify-center items-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-400"></div>
     </div>
   );
-};
-
-/**
- * Displays the daily nutritional summary and RDA percentages.
- */
-const DailySummary = ({ totals }) => {
-  const summaryItems = [
-    {
-      name: 'Calories',
-      value: totals.calories,
-      rda: RDA.calories,
-      unit: 'kcal',
-    },
-    {
-      name: 'Protein',
-      value: totals.protein,
-      rda: RDA.protein,
-      unit: 'g',
-    },
-    { name: 'Fat', value: totals.fat, rda: RDA.fat, unit: 'g' },
-    {
-      name: 'Carbs',
-      value: totals.carbohydrates,
-      rda: RDA.carbohydrates,
-      unit: 'g',
-    },
-  ];
-
-  return (
-    <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
-      <h2 className="text-xl font-semibold text-white mb-4">
-        Today's Summary
-      </h2>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {summaryItems.map((item) => {
-          const percentage = item.rda > 0 ? (item.value / item.rda) * 100 : 0;
-          const barWidth = Math.min(percentage, 100);
-
-          return (
-            <div key={item.name} className="text-center">
-              <div className="relative h-24 w-24 mx-auto">
-                <svg className="h-full w-full" viewBox="0 0 36 36">
-                  <path
-                    className="text-gray-700"
-                    d="M18 2.0845
-                      a 15.9155 15.9155 0 0 1 0 31.831
-                      a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3.8"
-                  />
-                  <path
-                    className="text-blue-500"
-                    d="M18 2.0845
-                      a 15.9155 15.9155 0 0 1 0 31.831
-                      a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3.8"
-                    strokeDasharray={`${barWidth}, 100`}
-                  />
-                </svg>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-lg font-bold text-white">
-                  {Math.round(percentage)}%
+  
+const Modal = ({ title, message, onClose }) => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity duration-300">
+      <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md border border-gray-200">
+        <h3 className="text-lg font-medium leading-6 text-gray-900">{title}</h3>
+        <div className="mt-2">
+          <p className="text-sm text-gray-600">{message}</p>
+        </div>
+        <div className="mt-4">
+          <button
+            type="button"
+            className="inline-flex justify-center rounded-md border border-transparent bg-teal-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-700"
+            onClick={onClose}
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+  
+  
+const DailySummaryContent = ({ totals }) => {
+    const nutItems = [
+      { name: '순탄수', key: 'carbohydrates', rda: 100, unit: 'g' }, 
+      { name: '단백질', key: 'protein', rda: 120, unit: 'g' }, 
+      { name: '지방', key: 'fat', rda: 50, unit: 'g' }, 
+      { name: '당류', key: 'sugar', rda: 50, unit: 'g' },
+      { name: '나트륨', key: 'sodium', rda: 2000, unit: 'mg' }, 
+    ].map(item => ({
+      ...item,
+      value: totals[item.key] || 0,
+      rda: item.rda 
+    }));
+  
+    return (
+      <div className="bg-teal-100 p-4 rounded-xl shadow-lg text-gray-800 border border-teal-200">
+        <div className="flex items-center mb-4">
+          <div className="bg-white text-teal-600 rounded-full w-20 h-20 flex flex-col items-center justify-center p-2 mr-4 font-bold shadow-md">
+            <span className="text-3xl">{Math.round(totals.calories)}</span>
+            <span className="text-xs font-medium">kcal</span>
+          </div>
+        </div>
+  
+        <div className="grid grid-cols-5 gap-2 text-center text-sm">
+          {nutItems.map((item) => {
+            const percentage = item.rda > 0 ? (item.value / item.rda) * 100 : 0;
+            const barWidth = Math.min(percentage, 100);
+            
+            return (
+              <div key={item.name} className="flex flex-col">
+                <span className="font-semibold text-sm mb-1">{item.name}</span> 
+                <div className="text-xs text-gray-600 mb-1">{item.value.toFixed(0)}/{item.rda}{item.unit}</div> 
+                <div className="h-1 bg-teal-200 rounded-full">
+                  <div 
+                    className="h-1 rounded-full" 
+                    style={{ width: `${barWidth}%`, backgroundColor: barWidth >= 100 ? '#f00' : '#48E28C' }} 
+                  ></div>
                 </div>
               </div>
-              <p className="font-semibold text-gray-300 mt-2">{item.name}</p>
-              <p className="text-sm text-gray-400">
-                {item.value.toFixed(0)} / {item.rda} {item.unit}
-              </p>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+  
+  
+const FoodList = ({ foodEntries }) => (
+    <div className="p-0 mt-4">
+      <h2 className="text-xl font-semibold text-gray-800 mb-4">오늘의 식사</h2>
+      <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 min-h-[150px]">
+        <div className="space-y-4 max-h-60 overflow-y-auto pr-2">
+          {foodEntries.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">
+              아직 기록된 식사가 없어요. 텍스트로 입력하거나 사진을 업로드해 보세요.
+            </p>
+          ) : foodEntries.map((entry) => (
+            <div key={entry.id} className="flex flex-col p-4 bg-teal-50 rounded-lg border border-teal-100"> 
+              <div className="flex justify-between items-center mb-2">
+                <p className="font-semibold text-gray-800">{entry.foodName}</p>
+                <span className="text-xs text-gray-500">{entry.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              <div className="text-xs text-gray-600 grid grid-cols-3 gap-2">
+                <span>{entry.calories?.toFixed(0)} kcal</span>
+                <span>P: {entry.nutrients?.protein?.toFixed(0)}g</span>
+                <span>C: {entry.nutrients?.carbohydrates?.toFixed(0)}g</span>
+                <span>F: {entry.nutrients?.fat?.toFixed(0)}g</span>
+                <span>Sug: {entry.nutrients?.sugar?.toFixed(0)}g</span>
+                <span>Sod: {entry.nutrients?.sodium?.toFixed(0)}mg</span>
+              </div>
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
     </div>
   );
-};
+  
+const FoodInputForm = ({ textInput, setTextInput, handleTextInput, handleImageUpload, isLoadingImage }) => {
+    return (
+      <div className="mt-6 p-4 bg-white rounded-xl shadow-inner border border-gray-200">
+        <form onSubmit={handleTextInput} className="flex items-center space-x-2">
+            <input
+              type="text"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              placeholder="오늘 먹은 음식을 텍스트로 입력하세요..."
+              className="flex-grow p-2 text-gray-800 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+              disabled={isLoadingImage}
+            />
+            
+            <input 
+              id="image-file-upload" 
+              type="file" 
+              className="sr-only" 
+              accept="image/*" 
+              onChange={(e) => handleImageUpload(e.target.files[0])} 
+              disabled={isLoadingImage} 
+            />
+            
+            <label htmlFor="image-file-upload" className="cursor-pointer p-2 rounded-lg hover:bg-gray-100 transition-colors">
+              {isLoadingImage ? (
+                <LoadingSpinner />
+              ) : (
+                <svg className="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 16m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              )}
+            </label>
+            
+            <button type="submit" className="bg-teal-600 p-2 rounded-lg hover:bg-teal-700 transition-colors" disabled={isLoadingImage || !textInput.trim()}>
+              <svg className="w-6 h-6 transform rotate-90 text-teal-600" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+              </svg>
+            </button>
+        </form>
+      </div>
+    );
+  };
+  
 
-/**
- * Displays the list of food items eaten today.
- */
-const FoodList = ({ foodEntries }) => (
-  <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
-    <h2 className="text-xl font-semibold text-white mb-4">Today's Log</h2>
-    <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-      {foodEntries.length === 0 ? (
-        <p className="text-gray-400 text-center py-4">
-          No food logged for today.
-        </p>
-      ) : (
-        foodEntries.map((entry) => (
-          <div
-            key={entry.id}
-            className="flex items-center justify-between p-4 bg-gray-700 rounded-lg"
-          >
-            <div>
-              <p className="font-semibold text-white">{entry.foodName}</p>
-              <p className="text-sm text-gray-400">
-                {entry.calories ? entry.calories.toFixed(0) : 0} kcal &bull;{' '}
-                {entry.nutrients?.protein ? entry.nutrients.protein.toFixed(0) : 0}g P &bull;{' '}
-                {entry.nutrients?.fat ? entry.nutrients.fat.toFixed(0) : 0}g F &bull;{' '}
-                {entry.nutrients?.carbohydrates ? entry.nutrients.carbohydrates.toFixed(0) : 0}g C
-              </p>
-            </div>
-            {entry.timestamp && (
-              <span className="text-sm text-gray-500">
-                {entry.timestamp.toDate().toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </span>
-            )}
-          </div>
-        ))
-      )}
-    </div>
-  </div>
-);
-
-
-// --- REMOVED: Recommendation Component ---
-
-
-/**
- * Main App Component
- */
+// --- MAIN APP ---
 export default function App() {
-  const [userId, setUserId] = useState(null);
+  const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [foodEntries, setFoodEntries] = useState([]);
+  const [userProfile, setUserProfile] = useState({ gender: 'male', height: 170, weight: 65 }); 
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [error, setError] = useState(null);
+  const [authError, setAuthError] = useState(null); 
+  const [textInput, setTextInput] = useState(''); 
+  const [currentPage, setCurrentPage] = useState('home'); 
+  
+  const [recommendation, setRecommendation] = useState(null); 
+  const [isLoadingRec, setIsLoadingRec] = useState(false);
+  const recommendationTimerRef = useRef(null);
 
-  // --- REMOVED: Recommendation State and Refs ---
+  // 관리자 상태 추가
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  // --- 1. Authentication Effect ---
+  // --- Auth Logic ---
   useEffect(() => {
-    if (!auth) {
-      console.error('Firebase Auth is not initialized.');
-      setError('Firebase failed to initialize. Please check console.');
-      return;
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setUserId(user.uid);
-        setIsAuthReady(true);
-      } else {
-        try {
-          if (initialAuthToken) {
-            await signInWithCustomToken(auth, initialAuthToken);
-          } else {
-            await signInAnonymously(auth);
-          }
-        } catch (authError) {
-          console.error('Error signing in:', authError);
-          setError(`Failed to authenticate: ${authError.message}`);
-        }
-      }
+    if (!auth) return;
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsAdmin(currentUser && currentUser.email === ADMIN_EMAIL);
+      setIsAuthReady(true);
     });
     return () => unsubscribe();
   }, []);
 
-  // --- 2. Firestore Data-Fetching Effect ---
-  useEffect(() => {
-    if (!isAuthReady || !userId || !db) {
-      return;
+  const handleLogin = async (email, password) => {
+    setAuthError(null);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      setAuthError("유효하지 않은 이메일 또는 비밀번호입니다.");
+      console.error(err);
     }
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const startOfTodayTimestamp = Timestamp.fromDate(startOfToday);
-    const entriesCollection = collection(
-      db,
-      `artifacts/${appId}/users/${userId}/foodEntries`
-    );
-    const q = query(
-      entriesCollection,
-      where('timestamp', '>=', startOfTodayTimestamp)
-    );
-    const unsubscribe = onSnapshot(
-      q,
-      (querySnapshot) => {
-        const entries = [];
-        querySnapshot.forEach((doc) => {
-          entries.push({ id: doc.id, ...doc.data() });
-        });
-        entries.sort((a, b) => {
-          if (a.timestamp && b.timestamp) {
-            return b.timestamp.toDate() - a.timestamp.toDate();
-          }
-          return 0;
-        });
-        setFoodEntries(entries);
-      },
-      (err) => {
-        console.error('Firestore snapshot error:', err);
-        setError(`Failed to load data: ${err.message}`);
-      }
-    );
-    return () => unsubscribe();
-  }, [isAuthReady, userId]);
+  };
 
-  // --- 3. Compute Daily Totals ---
+  const handleSignup = async (email, password) => {
+    setAuthError(null);
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      setAuthError(err.message.replace('Firebase: ', ''));
+      console.error(err);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setFoodEntries([]); 
+      setRecommendation(null);
+      setCurrentPage('home'); 
+      setIsAdmin(false);
+    } catch (err) {
+      setError("로그아웃 실패: " + err.message);
+    }
+  };
+
+  const handleUpdateProfile = (newProfileData) => {
+    setUserProfile(prev => ({ ...prev, ...newProfileData }));
+    console.log("프로필 업데이트:", newProfileData);
+  };
+
+
+  // Data Fetching
+  useEffect(() => {
+    if (!isAuthReady || !user || !db || isAdmin) return; 
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    const q = query(collection(db, `artifacts/${appId}/users/${user.uid}/foodEntries`), where('timestamp', '>=', Timestamp.fromDate(startOfToday)));
+    return onSnapshot(q, (snapshot) => {
+      const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      entries.sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
+      setFoodEntries(entries);
+    });
+  }, [isAuthReady, user, isAdmin]); 
+
+  // Totals
   const dailyTotals = useMemo(() => {
-    const totals = {
-      calories: 0,
-      protein: 0,
-      fat: 0,
-      carbohydrates: 0,
-    };
+    const totals = { calories: 0, protein: 0, fat: 0, carbohydrates: 0, sugar: 0, sodium: 0 };
     foodEntries.forEach((entry) => {
-      totals.calories += entry.calories || 0;
-      totals.protein += entry.nutrients?.protein || 0;
-      totals.fat += entry.nutrients?.fat || 0;
-      totals.carbohydrates += entry.nutrients?.carbohydrates || 0;
+      totals.calories += (entry.calories || 0);
+      totals.protein += (entry.nutrients?.protein || 0);
+      totals.fat += (entry.nutrients?.fat || 0);
+      totals.carbohydrates += (entry.nutrients?.carbohydrates || 0);
+      totals.sugar += (entry.nutrients?.sugar || 0);
+      totals.sodium += (entry.nutrients?.sodium || 0);
     });
     return totals;
   }, [foodEntries]);
 
-  // --- Helper: Convert file to base64 ---
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () =>
-        resolve(reader.result.split(',')[1]); 
-      reader.onerror = (error) => reject(error);
-    });
-  };
-
-  // --- 4. Gemini API Call: Image Analysis ---
+  // Image Upload handler
   const handleImageUpload = async (file) => {
     if (!file) return;
-    setIsLoadingImage(true);
-    setError(null);
+    setIsLoadingImage(true); setError(null);
     try {
-      const base64ImageData = await fileToBase64(file);
-      const response = await fetch('https://schoolstuff-lj67.onrender.com/analyze-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: base64ImageData,
-          mimeType: file.type,
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        const base64ImageData = reader.result.split(',')[1];
+        const response = await fetch('http://localhost:3001/analyze-image', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: base64ImageData, mimeType: file.type }),
+        });
+        if (!response.ok) throw new Error('Backend failed');
+        const foodData = await response.json();
+        if (db && user) {
+          await addDoc(collection(db, `artifacts/${appId}/users/${user.uid}/foodEntries`), { ...foodData, timestamp: Timestamp.now() });
+        }
+      };
+    } catch (err) { setError("이미지 분석 및 기록에 실패했습니다: " + err.message); } finally { setIsLoadingImage(false); }
+  };
+  
+  const handleTextInput = async (e) => {
+      e.preventDefault();
+      if (!textInput.trim()) return;
+      console.log(`Sending text for analysis: ${textInput}`);
+      setTextInput('');
+  };
+
+  const handleReset = async () => {
+    if (!db || !user) return;
+    if (!confirm("오늘의 데이터를 모두 초기화하시겠습니까?")) return;
+    try {
+      const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+      const q = query(collection(db, `artifacts/${appId}/users/${user.uid}/foodEntries`), where('timestamp', '>=', Timestamp.fromDate(startOfToday)));
+      const snapshot = await getDocs(q);
+      const batch = writeBatch(db);
+      snapshot.docs.forEach((doc) => { batch.delete(doc.ref); });
+      await batch.commit();
+      setRecommendation(null);
+    } catch (err) { setError("초기화 실패: " + err.message); }
+  };
+
+  const handleGetRecommendation = async () => {
+    if (isLoadingRec) return;
+    setIsLoadingRec(true);
+    setRecommendation(null); 
+    try {
+      const foodListArray = foodEntries.map(f => `${f.foodName} (${f.calories}kcal)`);
+      
+      const currentIntake = {
+        ...dailyTotals,
+        carbs: dailyTotals.carbohydrates 
+      };
+
+      const response = await fetch('http://localhost:3001/get-recommendation', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          foodList: foodListArray, 
+          currentIntake: currentIntake, 
+          gender: userProfile.gender 
         }),
       });
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(`Backend error: ${errData.error || response.statusText}`);
-      }
-      const foodData = await response.json();
-      if (db && userId) {
-        const entriesCollection = collection(
-          db,
-          `artifacts/${appId}/users/${userId}/foodEntries`
-        );
-        await addDoc(entriesCollection, {
-          ...foodData,
-          timestamp: Timestamp.now(), 
-        });
-      }
-    } catch (err) {
-      console.error('Error analyzing image:', err);
-      setError(`Error analyzing image: ${err.message}`);
-    } finally {
-      setIsLoadingImage(false);
+      
+      const data = await response.json();
+      setRecommendation(data); 
+
+    } catch (err) { 
+        setError("추천 메뉴를 가져오는 데 실패했습니다."); 
+        console.error(err); 
+    } finally { 
+        setIsLoadingRec(false); 
     }
   };
 
-  // --- REMOVED: handleGetRecommendation function ---
+  useEffect(() => {
+    if (!isAuthReady || !user || isAdmin) return; 
+    if (recommendationTimerRef.current) clearTimeout(recommendationTimerRef.current);
+    
+    if (foodEntries.length > 0) {
+        setIsLoadingRec(true);
+        recommendationTimerRef.current = setTimeout(() => handleGetRecommendation(), 3000);
+    }
+    return () => clearTimeout(recommendationTimerRef.current);
+  }, [dailyTotals, isAuthReady, user, isAdmin]);
+
   
-  // --- REMOVED: Automatic Recommendation Effect ---
+  if (!isAuthReady) return <div className="flex justify-center items-center h-screen bg-white"><LoadingSpinner /></div>;
 
-
-  // --- Render App ---
-  if (!isAuthReady) {
+  // --- Login Screen ---
+  if (!user) {
+    return <Login onLogin={handleLogin} onSignup={handleSignup} error={authError} />;
+  }
+  
+  // 🚀 Admin Render
+  if (isAdmin) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        <LoadingSpinner />
-        <p className="ml-2 text-gray-400">Authenticating...</p>
+      <div className="min-h-screen bg-white p-0 font-inter text-gray-800">
+        <header className="bg-teal-600 sticky top-0 z-10 shadow-lg">
+          <div className="max-w-4xl mx-auto flex justify-between items-center px-4 py-3">
+            <h1 className="text-2xl font-bold text-white mx-4">DIETER 관리자</h1>
+            <button 
+              onClick={handleLogout} 
+              className="mx-4 text-sm text-teal-600 border border-white hover:bg-teal-500 transition-colors duration-150 py-1 px-3 rounded-lg"
+            >
+              로그아웃 (관리자)
+            </button>
+          </div>
+        </header>
+        <main className="max-w-4xl mx-auto p-4 space-y-6 pt-8">
+            <Manager db={db} user={user} adminEmail={ADMIN_EMAIL} />
+        </main>
+        {error && <Modal title="오류" message={error} onClose={() => setError(null)} />}
       </div>
     );
   }
 
+
+  // 🚀 User Render
+
+  const navItems = [
+    { name: '홈', page: 'home' },
+    { name: '메뉴 추천', page: 'recommend' }, 
+    { name: '기록', page: 'record' }, 
+    { name: '마이페이지', page: 'mypage' },
+  ];
+  
+  const renderPage = () => {
+      
+      const RecommendationContent = () => (
+          <div className="bg-white p-6 rounded-2xl shadow-xl border border-gray-200">
+              <h3 className="text-xl font-bold text-teal-600 mb-4">오늘의 식단 추천</h3>
+              <div className="min-h-[150px] flex flex-col justify-between">
+                  {isLoadingRec ? (
+                      <LoadingSpinner />
+                  ) : recommendation ? (
+                      <div className="space-y-2">
+                          <h4 className="text-xl font-bold text-gray-800">{recommendation.menuName}</h4>
+                          <p className="text-sm text-teal-600 font-semibold">{recommendation.calories} kcal</p>
+                          <p className="text-gray-600">{recommendation.reason}</p>
+                      </div>
+                  ) : (
+                      <p className="text-gray-500 text-center py-8">
+                          현재까지의 식단 정보를 바탕으로 맞춤형 추천 메뉴를 받아보세요.
+                      </p>
+                  )}
+                  <button
+                      onClick={handleGetRecommendation}
+                      disabled={isLoadingRec}
+                      className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md mt-6 disabled:opacity-50"
+                  >
+                      {isLoadingRec ? '분석 중...' : '맞춤 메뉴 추천받기'}
+                  </button>
+              </div>
+          </div>
+      );
+
+
+      switch (currentPage) {
+          case 'mypage':
+              return (
+                <MyPage 
+                    user={user} 
+                    userProfile={userProfile} 
+                    onUpdateProfile={handleUpdateProfile} 
+                    onLogout={handleLogout} 
+                    onReset={handleReset} 
+                />
+              );
+              
+          case 'recommend':
+              return <RecommendationContent />;
+              
+          case 'record': 
+              return (
+                  <div className="space-y-6">
+                      <h2 className="text-2xl font-bold text-gray-800">나의 식단 상세 기록</h2>
+                      <FoodList foodEntries={foodEntries} />
+                  </div>
+              );
+
+          case 'home': 
+          default:
+              return (
+                  <div className="space-y-8">
+                      <div className="p-0">
+                             <h2 className="text-2xl font-bold text-gray-800 mb-4">오늘의 영양 상태</h2>
+                             <DailySummaryContent totals={dailyTotals} />
+                      </div>
+
+                      <div className="p-0">
+                          <h2 className="text-2xl font-bold text-gray-800 mb-4">식단 기록하기</h2>
+                          <FoodInputForm 
+                              textInput={textInput} 
+                              setTextInput={setTextInput} 
+                              handleTextInput={handleTextInput} 
+                              handleImageUpload={handleImageUpload} 
+                              isLoadingImage={isLoadingImage} 
+                          />
+                      </div>
+
+                      {/* --- 리셋 버튼 이동 --- */}
+                      <div className="flex justify-center mt-8 pb-8">
+                        <button
+                            onClick={handleReset}
+                            className="text-sm text-gray-400 hover:text-red-500 underline transition-colors"
+                        >
+                            일일 식단 리셋
+                        </button>
+                      </div>
+                  </div>
+              );
+      }
+  };
+
+
+  // --- Dashboard UI ---
   return (
-    <div className="min-h-screen bg-gray-900 p-4 sm:p-8 font-inter text-gray-200">
-      {error && (
-        <Modal
-          title="An Error Occurred"
-          message={error}
-          onClose={() => setError(null)}
-        />
-      )}
+    <div className="min-h-screen bg-white p-0 font-inter text-gray-800">
+      {error && <Modal title="오류" message={error} onClose={() => setError(null)} />}
+      
+      <header className="bg-white sticky top-0 z-10 shadow-md">
+        <div className="max-w-4xl mx-auto flex justify-between items-center px-4 py-3 border-b border-gray-200">
+          <h1 className="text-2xl font-bold text-teal-600 mx-4">Dieter</h1>
+          
+          <nav className="flex gap-6 text-teal-600 mx-2">
+            {navItems.map((item) => (
+                <button
+                    key={item.page}
+                    onClick={() => setCurrentPage(item.page)}
+                    className={`font-semibold transition-colors duration-150 ${
+                        currentPage === item.page ? 'text-teal-600 border-b-2 border-teal-600' : 'hover:text-teal-500'
+                    }`}
+                >
+                    {item.name}
+                </button>
+            ))}
+          </nav>
 
-      <main className="max-w-2xl mx-auto space-y-6">
-        <header className="text-center py-4">
-          <h1 className="text-4xl font-bold text-white">
-            Dieter
-          </h1>
-        </header>
+          {/* --- 로그아웃 버튼 복원 --- */}
+          <button 
+            onClick={handleLogout} 
+            className="mx-4 text-sm text-gray-500 hover:text-red-600 transition-colors duration-150 py-1 px-3 border border-gray-300 rounded-lg"
+          >
+            로그아웃
+          </button>
+        </div>
+      </header>
 
-        {/* 1. Add Food Item */}
-        <ImageUploader
-          onImageUpload={handleImageUpload}
-          isLoading={isLoadingImage}
-        />
-
-        {/* 2. Today's Summary */}
-        <DailySummary totals={dailyTotals} />
-        
-        {/* 3. Today's Log */}
-        <FoodList foodEntries={foodEntries} />
-
-        {/* --- REMOVED: Recommendation Component --- */}
+      <main className="max-w-4xl mx-auto p-4 space-y-6 pt-8">
+          {renderPage()}
       </main>
     </div>
   );
