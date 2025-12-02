@@ -21,24 +21,9 @@ const model = genAI.getGenerativeModel({
 });
 
 const RECOMMENDED_INTAKE = {
-  male: {
-    calories: 2500,
-    carbs: 324,
-    protein: 60,
-    fat: 54,
-    sugar: 50,    
-    sodium: 2000
-  },
-  female: {
-    calories: 2000,
-    carbs: 270,
-    protein: 50,
-    fat: 45,
-    sugar: 50,    
-    sodium: 2000
-  }
+  male: { calories: 2500, carbs: 324, protein: 60, fat: 54, sugar: 50, sodium: 2000 },
+  female: { calories: 2000, carbs: 270, protein: 50, fat: 45, sugar: 50, sodium: 2000 }
 };
-
 
 app.post('/analyze-image', async (req, res) => {
   try {
@@ -55,8 +40,8 @@ app.post('/analyze-image', async (req, res) => {
       },
     };
     
-   
-    const prompt = "Analyze this food item and return ONLY a valid JSON object with foodName, calories, and a nutrients object containing: protein (g), fat (g), carbohydrates (g), sugar (g), and sodium (mg).";
+    // [수정됨] 프롬프트: 음식 이름을 한국어로 반환하도록 요청
+    const prompt = "이 음식 사진을 분석하여 다음 필드를 가진 유효한 JSON 객체만 반환해 주세요: foodName(음식 이름은 반드시 한국어로), calories(칼로리 숫자), nutrients 객체(protein(단백질 g), fat(지방 g), carbohydrates(탄수화물 g), sugar(당류 g), sodium(나트륨 mg)).";
     
     const result = await model.generateContent([prompt, imagePart]);
     const response = result.response;
@@ -76,7 +61,7 @@ app.post('/analyze-image', async (req, res) => {
         if (rawJsonMatch) jsonText = rawJsonMatch[0];
       }
       
-      const cleanedJsonText = jsonText.replace(/[^\S \t\r\n\f\v{}[\]":,0-9.truefalsenull-]/g, '');
+      const cleanedJsonText = jsonText.replace(/[^\S \t\r\n\f\v{}[\]":,0-9.truefalsenull-가-힣a-zA-Z]/g, ''); // 한글 허용 Regex
       jsonData = JSON.parse(cleanedJsonText);
     } catch (parseError) {
       console.error('JSON Parse Error:', parseError);
@@ -91,54 +76,33 @@ app.post('/analyze-image', async (req, res) => {
   }
 });
 
-
 app.post('/get-recommendation', async (req, res) => {
   try {
-
     const { gender, currentIntake, foodList } = req.body;
 
-    if (!gender || !['male', 'female'].includes(gender)) {
-      return res.status(400).json({ error: 'Invalid gender' });
-    }
-    if (!currentIntake) {
-      return res.status(400).json({ error: 'Missing currentIntake data' });
-    }
+    if (!gender || !['male', 'female'].includes(gender)) return res.status(400).json({ error: 'Invalid gender' });
+    if (!currentIntake) return res.status(400).json({ error: 'Missing currentIntake data' });
 
     const standard = RECOMMENDED_INTAKE[gender];
     const eatenFoods = foodList ? `(오늘 먹은 음식: ${foodList.join(', ')})` : '';
 
-    console.log(`[추천 요청] 성별: ${gender}, 음식: ${eatenFoods}`);
-
     const prompt = `
       당신은 전문 영양사입니다. 
-      아래 제공된 [사용자 권장 섭취량]과 [오늘 실제 섭취량]을 비교 분석하여,
-      부족한 영양소를 채우거나 과잉을 조절할 수 있는 **저녁 메뉴 1가지**를 추천해주세요.
+      아래 [사용자 권장 섭취량]과 [오늘 실제 섭취량]을 비교하여,
+      부족하거나 과한 영양소를 고려한 **최적의 저녁 메뉴 1가지**를 추천해주세요.
       ${eatenFoods}
 
-      [1. 사용자 권장 섭취량 (${gender === 'male' ? '남성' : '여성'} 기준)]
-      - 칼로리: ${standard.calories}kcal
-      - 탄수화물: ${standard.carbs}g
-      - 단백질: ${standard.protein}g
-      - 지방: ${standard.fat}g
-      - 당류: ${standard.sugar}g
-      - 나트륨: ${standard.sodium}mg
+      [1. 권장 섭취량 (${gender === 'male' ? '남성' : '여성'})]
+      - 칼로리: ${standard.calories}kcal, 탄수화물: ${standard.carbs}g, 단백질: ${standard.protein}g, 지방: ${standard.fat}g, 당류: ${standard.sugar}g, 나트륨: ${standard.sodium}mg
 
-      [2. 오늘 실제 섭취량]
-      - 칼로리: ${currentIntake.calories || 0}kcal
-      - 탄수화물: ${currentIntake.carbs || 0}g
-      - 단백질: ${currentIntake.protein || 0}g
-      - 지방: ${currentIntake.fat || 0}g
-      - 당류: ${currentIntake.sugar || 0}g
-      - 나트륨: ${currentIntake.sodium || 0}mg
+      [2. 오늘 섭취량]
+      - 칼로리: ${currentIntake.calories}kcal, 탄수화물: ${currentIntake.carbs}g, 단백질: ${currentIntake.protein}g, 지방: ${currentIntake.fat}g, 당류: ${currentIntake.sugar}g, 나트륨: ${currentIntake.sodium}mg
 
-      [요청 사항]
-      1. 위 데이터를 바탕으로 최적의 한국식 저녁 메뉴를 선정하세요.
-      2. **반드시 아래 JSON 형식으로만 응답하세요.** (Markdown이나 설명글 없이 오직 JSON만)
-
+      [응답 형식 (JSON Only)]
       {
-        "menuName": "메뉴 이름",
-        "calories": 숫자(kcal),
-        "reason": "추천 이유 한 문장"
+        "menuName": "메뉴 이름 (한국어)",
+        "calories": 숫자,
+        "reason": "추천 이유 한 문장 (한국어)"
       }
     `;
 

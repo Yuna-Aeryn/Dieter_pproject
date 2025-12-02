@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 
-// 분리된 컴포넌트 import
+// 분리된 컴포넌트 import (These files must exist in your src folder)
 import Login from './Login'; 
 import MyPage from './MyPage'; 
-import Manager from './Manager'; // 🚀 Manager 컴포넌트 import
+import Manager from './Manager'; 
 
-// Firebase Imports (생략)
+// Firebase Imports
 import { initializeApp } from 'firebase/app';
 import {
   getAuth,
@@ -44,7 +44,6 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'dieter-app';
 
 // --- 관리자 정보 설정 ---
 const ADMIN_EMAIL = 'admin@dieter.com';
-const ADMIN_PASSWORD = 'admin1234';
 
 // --- Firebase Initialization ---
 let app, auth, db;
@@ -67,8 +66,7 @@ const STANDARD_RDA = {
   sugar: 50, 
 };
 
-// --- Helper Components (Design Updated) ---
-// ... (LoadingSpinner, Modal, DailySummaryContent, FoodList, FoodInputForm 컴포넌트는 변경 없음)
+// --- Helper Components ---
 
 const LoadingSpinner = () => (
     <div className="flex justify-center items-center">
@@ -160,11 +158,11 @@ const FoodList = ({ foodEntries }) => (
               </div>
               <div className="text-xs text-gray-600 grid grid-cols-3 gap-2">
                 <span>{entry.calories?.toFixed(0)} kcal</span>
-                <span>P: {entry.nutrients?.protein?.toFixed(0)}g</span>
-                <span>C: {entry.nutrients?.carbohydrates?.toFixed(0)}g</span>
-                <span>F: {entry.nutrients?.fat?.toFixed(0)}g</span>
-                <span>Sug: {entry.nutrients?.sugar?.toFixed(0)}g</span>
-                <span>Sod: {entry.nutrients?.sodium?.toFixed(0)}mg</span>
+                <span>단백질: {entry.nutrients?.protein?.toFixed(0)}g</span>
+                <span>탄수화물: {entry.nutrients?.carbohydrates?.toFixed(0)}g</span>
+                <span>지방: {entry.nutrients?.fat?.toFixed(0)}g</span>
+                <span>당류: {entry.nutrients?.sugar?.toFixed(0)}g</span>
+                <span>나트륨: {entry.nutrients?.sodium?.toFixed(0)}mg</span>
               </div>
             </div>
           ))}
@@ -228,14 +226,14 @@ export default function App() {
   const [textInput, setTextInput] = useState(''); 
   const [currentPage, setCurrentPage] = useState('home'); 
   
-  const [recommendation, setRecommendation] = useState('');
+  const [recommendation, setRecommendation] = useState(null); 
   const [isLoadingRec, setIsLoadingRec] = useState(false);
   const recommendationTimerRef = useRef(null);
 
   // 관리자 상태 추가
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // --- Auth Logic (Updated) ---
+  // --- Auth Logic ---
   useEffect(() => {
     if (!auth) return;
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -270,7 +268,7 @@ export default function App() {
     try {
       await signOut(auth);
       setFoodEntries([]); 
-      setRecommendation('');
+      setRecommendation(null);
       setCurrentPage('home'); 
       setIsAdmin(false);
     } catch (err) {
@@ -284,7 +282,7 @@ export default function App() {
   };
 
 
-  // Data Fetching (Updated for Admin skip)
+  // Data Fetching
   useEffect(() => {
     if (!isAuthReady || !user || !db || isAdmin) return; 
     const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
@@ -296,7 +294,7 @@ export default function App() {
     });
   }, [isAuthReady, user, isAdmin]); 
 
-  // Totals (Unchanged)
+  // Totals
   const dailyTotals = useMemo(() => {
     const totals = { calories: 0, protein: 0, fat: 0, carbohydrates: 0, sugar: 0, sodium: 0 };
     foodEntries.forEach((entry) => {
@@ -310,7 +308,7 @@ export default function App() {
     return totals;
   }, [foodEntries]);
 
-  // Image Upload, Text Input, Reset, Recommendation handlers (Unchanged)
+  // Image Upload handler
   const handleImageUpload = async (file) => {
     if (!file) return;
     setIsLoadingImage(true); setError(null);
@@ -349,39 +347,50 @@ export default function App() {
       const batch = writeBatch(db);
       snapshot.docs.forEach((doc) => { batch.delete(doc.ref); });
       await batch.commit();
-      setRecommendation('');
+      setRecommendation(null);
     } catch (err) { setError("초기화 실패: " + err.message); }
   };
 
   const handleGetRecommendation = async () => {
     if (isLoadingRec) return;
     setIsLoadingRec(true);
-    setRecommendation(''); 
+    setRecommendation(null); 
     try {
-      const foodListString = foodEntries.map(f => `${f.foodName} (${f.calories}kcal)`).join(', ');
+      const foodListArray = foodEntries.map(f => `${f.foodName} (${f.calories}kcal)`);
       
+      const currentIntake = {
+        ...dailyTotals,
+        carbs: dailyTotals.carbohydrates 
+      };
+
       const response = await fetch('http://localhost:3001/get-recommendation', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          foodList: foodListString, 
-          totals: dailyTotals, 
-          rda: STANDARD_RDA 
+          foodList: foodListArray, 
+          currentIntake: currentIntake, 
+          gender: userProfile.gender 
         }),
       });
       
       const data = await response.json();
-      setRecommendation(data.recommendation);
+      setRecommendation(data); 
 
-    } catch (err) { setError("추천 메뉴를 가져오는 데 실패했습니다."); console.error(err); } finally { setIsLoadingRec(false); }
+    } catch (err) { 
+        setError("추천 메뉴를 가져오는 데 실패했습니다."); 
+        console.error(err); 
+    } finally { 
+        setIsLoadingRec(false); 
+    }
   };
 
   useEffect(() => {
     if (!isAuthReady || !user || isAdmin) return; 
     if (recommendationTimerRef.current) clearTimeout(recommendationTimerRef.current);
     
+    // Only auto-trigger if there is food logged
     if (foodEntries.length > 0) {
         setIsLoadingRec(true);
-        // recommendationTimerRef.current = setTimeout(() => handleGetRecommendation(), 3000);
+        recommendationTimerRef.current = setTimeout(() => handleGetRecommendation(), 3000);
     }
     return () => clearTimeout(recommendationTimerRef.current);
   }, [dailyTotals, isAuthReady, user, isAdmin]);
@@ -394,11 +403,10 @@ export default function App() {
     return <Login onLogin={handleLogin} onSignup={handleSignup} error={authError} />;
   }
   
-  // 🚀 관리자 화면 렌더링 (헤더 색상 변경)
+  // 🚀 Admin Render
   if (isAdmin) {
     return (
       <div className="min-h-screen bg-white p-0 font-inter text-gray-800">
-        {/* 🚀 헤더 색상 민트색으로 변경 */}
         <header className="bg-teal-600 sticky top-0 z-10 shadow-lg">
           <div className="max-w-4xl mx-auto flex justify-between items-center px-4 py-3">
             <h1 className="text-2xl font-bold text-white mx-4">DIETER 관리자</h1>
@@ -411,7 +419,6 @@ export default function App() {
           </div>
         </header>
         <main className="max-w-4xl mx-auto p-4 space-y-6 pt-8">
-            {/* 🚀 Manager 컴포넌트에 adminEmail 전달 */}
             <Manager db={db} user={user} adminEmail={ADMIN_EMAIL} />
         </main>
         {error && <Modal title="오류" message={error} onClose={() => setError(null)} />}
@@ -420,12 +427,12 @@ export default function App() {
   }
 
 
-  // 🚀 일반 사용자 화면 렌더링 (기존 로직)
+  // 🚀 User Render
 
   const navItems = [
     { name: '홈', page: 'home' },
-    { name: '기록', page: 'record' }, 
     { name: '메뉴 추천', page: 'recommend' }, 
+    { name: '기록', page: 'record' }, 
     { name: '마이페이지', page: 'mypage' },
   ];
   
@@ -438,7 +445,11 @@ export default function App() {
                   {isLoadingRec ? (
                       <LoadingSpinner />
                   ) : recommendation ? (
-                      <p className="text-gray-800 whitespace-pre-wrap">{recommendation}</p>
+                      <div className="space-y-2">
+                          <h4 className="text-xl font-bold text-gray-800">{recommendation.menuName}</h4>
+                          <p className="text-sm text-teal-600 font-semibold">{recommendation.calories} kcal</p>
+                          <p className="text-gray-600">{recommendation.reason}</p>
+                      </div>
                   ) : (
                       <p className="text-gray-500 text-center py-8">
                           현재까지의 식단 정보를 바탕으로 맞춤형 추천 메뉴를 받아보세요.
@@ -498,6 +509,16 @@ export default function App() {
                               isLoadingImage={isLoadingImage} 
                           />
                       </div>
+
+                      {/* --- 리셋 버튼 이동 --- */}
+                      <div className="flex justify-center mt-8 pb-8">
+                        <button
+                            onClick={handleReset}
+                            className="text-sm text-gray-400 hover:text-red-500 underline transition-colors"
+                        >
+                            일일 식단 리셋
+                        </button>
+                      </div>
                   </div>
               );
       }
@@ -527,12 +548,8 @@ export default function App() {
             ))}
           </nav>
 
-          <button 
-            onClick={handleLogout} 
-            className=" mx-4 text-sm text-gray-800 hover:text-red-600 transition-colors duration-150 py-1 px-3 border border-gray-300 rounded-lg"
-          >
-            로그아웃
-          </button>
+          {/* --- 로그아웃 버튼 제거 --- */}
+          <div className="w-16"></div> 
         </div>
       </header>
 
