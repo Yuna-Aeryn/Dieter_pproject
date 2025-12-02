@@ -56,6 +56,16 @@ try {
   console.error('Firebase initialization error:', e);
 }
 
+// --- STANDARD Recommended Daily Allowances (RDAs) ---
+const STANDARD_RDA = {
+  calories: 2000,
+  protein: 50, 
+  fat: 78, 
+  carbohydrates: 275, 
+  sodium: 2300, 
+  sugar: 50, 
+};
+
 // --- Helper Components ---
 
 const LoadingSpinner = () => (
@@ -341,8 +351,10 @@ export default function App() {
     } catch (err) { setError("초기화 실패: " + err.message); }
   };
 
+  // --- 🚀 FIXED: Removed the blocking 'if (isLoadingRec) return;' check ---
   const handleGetRecommendation = async () => {
-    if (isLoadingRec) return;
+    // 🛑 이전에 있던 'if (isLoadingRec) return;' 코드를 제거했습니다.
+    // useEffect에서 이미 isLoadingRec(true)를 설정하므로 이 체크가 있으면 항상 함수가 멈추게 됩니다.
     setIsLoadingRec(true);
     setRecommendation(null); 
     try {
@@ -377,8 +389,10 @@ export default function App() {
     if (!isAuthReady || !user || isAdmin) return; 
     if (recommendationTimerRef.current) clearTimeout(recommendationTimerRef.current);
     
+    // Only auto-trigger if there is food logged
     if (foodEntries.length > 0) {
         setIsLoadingRec(true);
+        // 타이머 활성화 (3초 뒤 실행)
         recommendationTimerRef.current = setTimeout(() => handleGetRecommendation(), 3000);
     }
     return () => clearTimeout(recommendationTimerRef.current);
