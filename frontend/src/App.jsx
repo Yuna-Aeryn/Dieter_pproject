@@ -365,7 +365,7 @@ export default function App() {
         carbs: dailyTotals.carbohydrates 
       };
 
-      const response = await fetch('https://schoolstuff-lj67.onrender.com/analyze-image', {
+      const response = await fetch('https://schoolstuff-lj67.onrender.com/get-recommendation', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           foodList: foodListArray, 
