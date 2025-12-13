@@ -8,11 +8,14 @@ const Login = ({ onLogin, onSignup, error }) => {
   const [isSignup, setIsSignup] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // [추가] 사용자 이름(닉네임) 상태
+  const [username, setUsername] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (isSignup) {
-      onSignup(email, password);
+      // [수정] 회원가입 시 username도 함께 전달
+      onSignup(email, password, username);
     } else {
       onLogin(email, password);
     }
@@ -37,6 +40,22 @@ const Login = ({ onLogin, onSignup, error }) => {
         )}
         
         <form onSubmit={handleSubmit} className="space-y-4">
+          
+          {/* [추가] 회원가입 시에만 보이는 사용자 이름 입력 필드 */}
+          {isSignup && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">사용자 이름 (닉네임)</label>
+              <input
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                placeholder="홍길동"
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">이메일 주소</label>
             <input
@@ -76,7 +95,7 @@ const Login = ({ onLogin, onSignup, error }) => {
           <p className="text-sm text-gray-500">
             {isSignup ? "이미 계정이 있으신가요? " : "계정이 없으신가요? "}
             <button
-              onClick={() => { setIsSignup(!isSignup); setEmail(''); setPassword(''); }}
+              onClick={() => { setIsSignup(!isSignup); setEmail(''); setPassword(''); setUsername(''); }}
               // 토글 버튼 디자인: 민트색 텍스트
               className="text-teal-600 hover:text-teal-700 font-medium hover:underline focus:outline-none"
             >

@@ -18,6 +18,8 @@ import {
   getFirestore,
   doc,
   addDoc,
+  setDoc, // [추가] 사용자 프로필 생성용
+  getDoc, // [추가] 사용자 프로필 조회용
   writeBatch,
   collection,
   query,
@@ -219,7 +221,13 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [foodEntries, setFoodEntries] = useState([]);
-  const [userProfile, setUserProfile] = useState({ gender: 'male', height: 170, weight: 65 }); 
+  
+  // [수정] userProfile에 username 필드 추가
+  const [userProfile, setUserProfile] = useState({ 
+    username: '', 
+    gender: 'male' 
+  }); 
+  
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [error, setError] = useState(null);
   const [authError, setAuthError] = useState(null); 
@@ -236,9 +244,27 @@ export default function App() {
   // --- Auth Logic ---
   useEffect(() => {
     if (!auth) return;
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setIsAdmin(currentUser && currentUser.email === ADMIN_EMAIL);
+      
+      // [추가] 로그인 시 Firestore에서 사용자 프로필 불러오기 (닉네임 등)
+      if (currentUser) {
+        try {
+            const userDocRef = doc(db, `artifacts/${appId}/users/${currentUser.uid}`);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+                const data = userDoc.data();
+                setUserProfile(prev => ({ ...prev, ...data })); // 기존 state와 병합
+            }
+        } catch (err) {
+            console.error("프로필 불러오기 오류:", err);
+        }
+      } else {
+        // 로그아웃 시 프로필 초기화
+        setUserProfile({ username: '', gender: 'male' });
+      }
+
       setIsAuthReady(true);
     });
     return () => unsubscribe();
@@ -254,10 +280,24 @@ export default function App() {
     }
   };
 
-  const handleSignup = async (email, password) => {
+  // [수정] 회원가입 시 username 인자 추가
+  const handleSignup = async (email, password, username) => {
     setAuthError(null);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      // 1. Auth 사용자 생성
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // 2. Firestore에 사용자 프로필 문서 생성 (닉네임 저장)
+      // artifacts/dieter-app/users/{uid} 경로에 저장
+      await setDoc(doc(db, `artifacts/${appId}/users/${user.uid}`), {
+        username: username,
+        email: email,
+        gender: 'male', // 기본값
+        createdAt: Timestamp.now()
+      });
+
+      // onAuthStateChanged가 트리거되면서 state 업데이트 됨
     } catch (err) {
       setAuthError(err.message.replace('Firebase: ', ''));
       console.error(err);
@@ -276,9 +316,21 @@ export default function App() {
     }
   };
 
-  const handleUpdateProfile = (newProfileData) => {
+  const handleUpdateProfile = async (newProfileData) => {
+    // UI 즉시 반영
     setUserProfile(prev => ({ ...prev, ...newProfileData }));
-    console.log("프로필 업데이트:", newProfileData);
+    
+    // Firestore 업데이트
+    if (user) {
+        try {
+            const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}`);
+            // merge: true 옵션으로 기존 필드 유지하면서 업데이트
+            await setDoc(userDocRef, newProfileData, { merge: true });
+        } catch (err) {
+            console.error("프로필 업데이트 오류:", err);
+            setError("프로필 저장 실패: " + err.message);
+        }
+    }
   };
 
 
@@ -317,7 +369,7 @@ export default function App() {
       reader.readAsDataURL(file);
       reader.onload = async () => {
         const base64ImageData = reader.result.split(',')[1];
-        const response = await fetch('https://schoolstuff-lj67.onrender.com/analyze-image', {
+        const response = await fetch('http://localhost:3001/analyze-image', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64: base64ImageData, mimeType: file.type }),
         });
@@ -351,25 +403,27 @@ export default function App() {
     } catch (err) { setError("초기화 실패: " + err.message); }
   };
 
-  // --- 🚀 FIXED: Removed the blocking 'if (isLoadingRec) return;' check ---
+  // --- Recommendation Handler ---
   const handleGetRecommendation = async () => {
     // 🛑 이전에 있던 'if (isLoadingRec) return;' 코드를 제거했습니다.
     // useEffect에서 이미 isLoadingRec(true)를 설정하므로 이 체크가 있으면 항상 함수가 멈추게 됩니다.
     setIsLoadingRec(true);
     setRecommendation(null); 
     try {
+      // 1. Create Array of Strings (server expects foodList: string[])
       const foodListArray = foodEntries.map(f => `${f.foodName} (${f.calories}kcal)`);
       
+      // 2. Map 'carbohydrates' -> 'carbs' (Server expects currentIntake: { carbs: ... })
       const currentIntake = {
         ...dailyTotals,
         carbs: dailyTotals.carbohydrates 
       };
 
-      const response = await fetch('https://schoolstuff-lj67.onrender.com/get-recommendation', {
+      const response = await fetch('http://localhost:3001/get-recommendation', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           foodList: foodListArray, 
-          currentIntake: currentIntake, 
+          currentIntake: currentIntake, // Sending formatted object
           gender: userProfile.gender 
         }),
       });
@@ -385,6 +439,7 @@ export default function App() {
     }
   };
 
+  // --- Auto-trigger Effect ---
   useEffect(() => {
     if (!isAuthReady || !user || isAdmin) return; 
     if (recommendationTimerRef.current) clearTimeout(recommendationTimerRef.current);
@@ -392,7 +447,7 @@ export default function App() {
     // Only auto-trigger if there is food logged
     if (foodEntries.length > 0) {
         setIsLoadingRec(true);
-        // 타이머 활성화 (3초 뒤 실행)
+        // The timer is now active!
         recommendationTimerRef.current = setTimeout(() => handleGetRecommendation(), 3000);
     }
     return () => clearTimeout(recommendationTimerRef.current);
@@ -403,6 +458,7 @@ export default function App() {
 
   // --- Login Screen ---
   if (!user) {
+    // Pass the new handleSignup which now accepts username
     return <Login onLogin={handleLogin} onSignup={handleSignup} error={authError} />;
   }
   
@@ -551,13 +607,8 @@ export default function App() {
             ))}
           </nav>
 
-          {/* --- 로그아웃 버튼 복원 --- */}
-          <button 
-            onClick={handleLogout} 
-            className="mx-4 text-sm text-gray-500 hover:text-red-600 transition-colors duration-150 py-1 px-3 border border-gray-300 rounded-lg"
-          >
-            로그아웃
-          </button>
+          {/* --- 로그아웃 버튼 제거 --- */}
+          <div className="w-16"></div> 
         </div>
       </header>
 
