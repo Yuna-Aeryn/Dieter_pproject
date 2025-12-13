@@ -1,0 +1,72 @@
+def recommend_menu(user_state, food_df, recent_food_names=None):
+
+    if recent_food_names is None:
+        recent_food_names = []
+
+    feature_order = [
+        '에너지(kcal)', '탄수화물(g)', '단백질(g)', '지방(g)', '당류(g)', '나트륨(mg)',
+        'rec_cal', 'rec_carb', 'rec_pro', 'rec_fat', 'rec_sugar', 'rec_na',
+        'cur_cal', 'cur_carb', 'cur_pro', 'cur_fat', 'cur_sugar', 'cur_na'
+    ]
+
+    food_features = food_df[[
+        "에너지(kcal)", "탄수화물(g)", "단백질(g)",
+        "지방(g)", "당류(g)", "나트륨(mg)"
+    ]]
+
+    # user_state 누락값은 0으로
+    for col in feature_order:
+        if col not in food_features.columns and col not in user_state:
+            user_state[col] = 0
+
+    user_df = pd.DataFrame([user_state] * len(food_df))
+
+    merged = pd.concat([food_features, user_df], axis=1)
+    merged = merged[feature_order]
+
+    merged_scaled = scaler.transform(merged)
+    preds = model.predict(merged_scaled)
+
+    # 점수 높은 순서대로 정렬된 인덱스
+    sorted_idx = np.argsort(preds)[::-1]
+
+    selected = []
+    used_categories = set()      # 같은 대표식품명 방지
+    used_food_names = set(recent_food_names)  # 최근 30일 음식 제외
+
+    for idx in sorted_idx:
+        food_name = food_df.iloc[idx]["음식명"]
+        category = food_df.iloc[idx]["대표식품명"]
+
+        # 조건 1: 최근 30일과 음식명이 겹치면 제외
+        if food_name in used_food_names:
+            continue
+
+        # 조건 2: 추천 후보끼리 카테고리가 겹치면 제외
+        if category in used_categories:
+            continue
+
+        # 선택
+        selected.append(idx)
+        used_categories.add(category)
+        used_food_names.add(food_name)
+
+        if len(selected) == 3:
+            break
+
+    # 결과 포맷 구성
+    results = []
+    for idx in selected:
+        meal = food_df.iloc[idx]
+        results.append({
+            "recommend_menu": meal["음식명"],
+            "calorie": float(meal["에너지(kcal)"]),
+            "carb": float(meal["탄수화물(g)"]),
+            "protein": float(meal["단백질(g)"]),
+            "fat": float(meal["지방(g)"]),
+            "sugar": float(meal["당류(g)"]),
+            "na": float(meal["나트륨(mg)"]),
+            "score": float(preds[idx])
+        })
+
+    return results
