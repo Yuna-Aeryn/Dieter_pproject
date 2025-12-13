@@ -8,7 +8,7 @@ const app = express();
 const port = 3001;
 
 // CORS 설정
-app.use(cors({ origin: 'http://localhost:5173' }));
+app.use(cors({ origin: 'https://dieter01.netlify.app' }));
 app.use(express.json({ limit: '10mb' }));
 
 // ----------------------------------------------------------------
