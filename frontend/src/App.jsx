@@ -84,7 +84,7 @@ const Modal = ({ title, message, onClose }) => (
         <div className="mt-4">
           <button
             type="button"
-            className="inline-flex justify-center rounded-md border border-transparent bg-teal-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-700"
+            className="inline-flex justify-center rounded-md border border-transparent bg-teal-600 px-4 py-2 text-sm font-medium text-teal-600 shadow-sm hover:bg-teal-700"
             onClick={onClose}
           >
             닫기
@@ -97,7 +97,7 @@ const Modal = ({ title, message, onClose }) => (
   
 const DailySummaryContent = ({ totals }) => {
     const nutItems = [
-      { name: '순탄수', key: 'carbohydrates', rda: 100, unit: 'g' }, 
+      { name: '순탄수', key: 'carbohydrates', rda: 250, unit: 'g' }, 
       { name: '단백질', key: 'protein', rda: 120, unit: 'g' }, 
       { name: '지방', key: 'fat', rda: 50, unit: 'g' }, 
       { name: '당류', key: 'sugar', rda: 50, unit: 'g' },
@@ -461,7 +461,7 @@ export default function App() {
                   <button
                       onClick={handleGetRecommendation}
                       disabled={isLoadingRec}
-                      className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md mt-6 disabled:opacity-50"
+                      className="w-full bg-teal-600 hover:bg-teal-700 text-teal-600 font-bold py-3 rounded-lg transition-colors shadow-md mt-6 disabled:opacity-50"
                   >
                       {isLoadingRec ? '분석 중...' : '맞춤 메뉴 추천받기'}
                   </button>
