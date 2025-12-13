@@ -317,7 +317,7 @@ export default function App() {
       reader.readAsDataURL(file);
       reader.onload = async () => {
         const base64ImageData = reader.result.split(',')[1];
-        const response = await fetch('http://localhost:3001/analyze-image', {
+        const response = await fetch('https://schoolstuff-lj67.onrender.com/analyze-image', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64: base64ImageData, mimeType: file.type }),
         });
@@ -365,7 +365,7 @@ export default function App() {
         carbs: dailyTotals.carbohydrates 
       };
 
-      const response = await fetch('http://localhost:3001/get-recommendation', {
+      const response = await fetch('https://schoolstuff-lj67.onrender.com/get-recommendation', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           foodList: foodListArray, 
