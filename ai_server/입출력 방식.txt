@@ -1,0 +1,29 @@
+입력형식:
+
+//값에 변수 할당하셔서 사용하시면 됩니다!
+//rec = 권장량
+//cur = 최근섭취량 평균
+
+test_user_state = {
+    "rec_cal": 1950,
+    "rec_carb": 200,
+    "rec_pro": 65,
+    "rec_fat": 55,
+    "rec_sugar": 40,
+    "rec_na": 1600,
+    "cur_cal": 1100,
+    "cur_carb": 125,
+    "cur_pro": 62,
+    "cur_fat": 42,
+    "cur_sugar": 40,
+    "cur_na": 1050
+}
+
+recent_food_names = ["누룽지", "감자구이", "단호박찜", "죽순볶음", "찐감자", "미역국_새우"]  
+# ← DB에서 가져온 최근 30일 음식명
+
+results = recommend_menu(test_user_state, food, recent_food_names)
+print(results)
+
+출력형식:
+[{'recommend_menu': '샐러드_샐러드', 'calorie': 15.0, 'carb': nan, 'protein': 1.0, 'fat': nan, 'sugar': 0.0, 'na': 12.0, 'score': 161.3760528564453}, {'recommend_menu': '찐고구마', 'calorie': 139.0, 'carb': 32.47, 'protein': 1.67, 'fat': 0.24, 'sugar': 16.32, 'na': 10.0, 'score': 129.36985778808594}, {'recommend_menu': '소금빵', 'calorie': 325.0, 'carb': 46.67, 'protein': 8.33, 'fat': 11.67, 'sugar': 3.33, 'na': 650.0, 'score': 125.50413513183594}]
