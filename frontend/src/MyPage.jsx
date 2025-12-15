@@ -2,13 +2,11 @@ import React, { useState } from 'react';
 
 // MyPage 컴포넌트는 App.js에서 필요한 데이터와 함수를 prop으로 받습니다.
 const MyPage = ({ user, userProfile, onUpdateProfile, onLogout, onReset }) => {
-  // 사용자 정보를 통합하여 관리합니다.
   const [gender, setGender] = useState(userProfile.gender || 'male');
   const [email, setEmail] = useState(user?.email || '테스트 사용자'); 
   const [newPassword, setNewPassword] = useState('');
   
   const handleSave = () => {
-    // onUpdateProfile은 신체 정보만 App.js로 전달합니다.
     onUpdateProfile({ 
         gender: gender,
     });
@@ -22,15 +20,24 @@ const MyPage = ({ user, userProfile, onUpdateProfile, onLogout, onReset }) => {
   };
 
   return (
-    // 배경을 연한 회색 (bg-gray-50)으로 설정
     <div className="min-h-screen bg-gray-50 p-4 font-inter text-gray-800">
-      {/* max-w-4xl로 너비를 확장하고, mx-auto로 중앙 정렬을 유지합니다. */}
       <main className="max-w-4xl mx-auto space-y-8"> 
         <h2 className="text-3xl font-bold text-gray-800 border-b pb-4 border-gray-200">마이페이지</h2>
 
-        {/* 1. 사용자 정보 섹션 통합 - 밝은 흰색 카드, 민트색 헤더 */}
         <section className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
             <h3 className="text-xl font-bold text-teal-600 mb-4">사용자 정보</h3>
+            
+            {/* NEW: Display Username */}
+            <div className="mb-6 p-4 bg-teal-50 rounded-lg border border-teal-100 flex items-center gap-3">
+                 <div className="w-12 h-12 bg-teal-200 rounded-full flex items-center justify-center text-teal-700 font-bold text-xl">
+                    {userProfile.username ? userProfile.username[0] : 'U'}
+                 </div>
+                 <div>
+                     <p className="text-sm text-teal-800 font-bold">{userProfile.username || '사용자'} 님</p>
+                     <p className="text-xs text-teal-600">환영합니다!</p>
+                 </div>
+            </div>
+
             <div className="space-y-6">
                 
                 {/* 1-1. 성별 설정 */}
@@ -67,7 +74,7 @@ const MyPage = ({ user, userProfile, onUpdateProfile, onLogout, onReset }) => {
                 {/* 1-4. 저장 버튼 (민트색) */}
                 <button 
                   onClick={handleSave}
-                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md mt-2"
+                  className="w-full bg-teal-600 hover:bg-teal-700 text-teal-600 font-bold py-3 rounded-lg transition-colors shadow-md mt-2"
                 >
                   사용자 정보 저장
                 </button>
@@ -77,7 +84,6 @@ const MyPage = ({ user, userProfile, onUpdateProfile, onLogout, onReset }) => {
                     <p className="text-sm text-gray-500 mb-2">현재 계정에서 로그아웃합니다.</p>
                     <button 
                       onClick={onLogout}
-                      // 버튼 배경: 밝은 회색, 텍스트: 빨간색 (명확한 가시성)
                       className="w-full bg-gray-100 hover:bg-gray-200 text-red-500 font-bold py-3 rounded-lg transition-colors shadow-sm border border-gray-200"
                     >
                       로그아웃
