@@ -213,8 +213,10 @@ app.post('/get-recommendation', async (req, res) => {
       },
       recent_food_names: foodList || []
     });
-
-    if (recommendations.length > 0) {
+	
+    const recommendations = response.data; 
+	
+    if (recommendations && recommendations.length > 0) {
         const safeList = recommendations.map(item => ({
             menuName: item.recommend_menu,
             calories: extractNumber(item.calorie),
@@ -235,7 +237,6 @@ app.post('/get-recommendation', async (req, res) => {
     } else {
         res.status(200).json({ menuName: "추천 불가", calories: 0, reason: "조건에 맞는 메뉴가 없습니다." });
     }
-
 
   } catch (error) {
     // 에러 로그를 더 자세히 출력

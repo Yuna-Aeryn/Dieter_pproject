@@ -1,31 +1,19 @@
-app.post('/get-recommendation', async (req, res) => {
-  try {
-    const { gender, currentIntake, foodList } = req.body;
-    if (!gender || !currentIntake) return res.status(400).json({ error: 'Missing data' });
+// ... inside app.post('/get-recommendation', ...)
 
-    const standard = RECOMMENDED_INTAKE[gender];
-    const user_state = {
-      "rec_cal": standard.calories, "rec_carb": standard.carbs, "rec_pro": standard.protein,
-      "rec_fat": standard.fat, "rec_sugar": standard.sugar, "rec_na": standard.sodium,
-      "cur_cal": extractNumber(currentIntake.calories),
-      "cur_carb": extractNumber(currentIntake.carbs),
-      "cur_pro": extractNumber(currentIntake.protein),
-      "cur_fat": extractNumber(currentIntake.fat),
-      "cur_sugar": extractNumber(currentIntake.sugar),
-      "cur_na": extractNumber(currentIntake.sodium)
-    };
-
-    console.log("📤 추천 요청 보냄 (Python)...");
-    
-    // 파이썬 서버 호출
-    const response = await axios.post('${PYTHON_API_URL}/recommend', {
-      user_state: user_state,
+    // 2. 요청 보내기 (Request to Python)
+    const response = await axios.post(`${pythonBaseUrl}/recommend`, {
+      user_state: {
+          "rec_cal": 2500, 
+          ...req.body.currentIntake 
+      },
       recent_food_names: foodList || []
     });
 
-    const recommendations = response.data;
+    // 🔥 [MISSING LINE] Extract the data from the response!
+    const recommendations = response.data; 
 
-    if (recommendations.length > 0) {
+    // Now 'recommendations' is defined, so this works:
+    if (recommendations && recommendations.length > 0) {
         const safeList = recommendations.map(item => ({
             menuName: item.recommend_menu,
             calories: extractNumber(item.calorie),
@@ -46,9 +34,4 @@ app.post('/get-recommendation', async (req, res) => {
     } else {
         res.status(200).json({ menuName: "추천 불가", calories: 0, reason: "조건에 맞는 메뉴가 없습니다." });
     }
-
-  } catch (error) {
-    console.error('❌ Recommendation Error:', error.message);
-    res.status(500).json({ error: 'Python Server connection failed' });
-  }
-});
+// ...
