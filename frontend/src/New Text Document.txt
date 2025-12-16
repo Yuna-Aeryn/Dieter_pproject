@@ -1,2 +1,9 @@
-// After
-<p className="text-sm text-teal-600 font-semibold">{recommendation.calories}</p>
+분석 고침 
+추천 고침
+
+언더스코어 (_) 지움, 순서 변경 
+kcal 지움 
+로고 변경 
+
+패스워드 변경 권한 오류 해결 
+관리자 페이지 불러오기 오류 해결 

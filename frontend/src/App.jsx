@@ -528,7 +528,7 @@ const handleGetRecommendation = async () => {
             <img 
 			src={logoImage} 
 			alt="Dieter Admin" 
-			className="h-10 w-auto object-contain mx-4 bg-white rounded px-2" 
+			className="mx-4 text-sm text-red-500 border border-white hover:bg-teal-500 transition-colors duration-150 py-1 px-3 rounded-lg"
 			/>
             <button 
               onClick={handleLogout} 
@@ -692,11 +692,12 @@ const handleGetRecommendation = async () => {
       
       <header className="bg-white sticky top-0 z-10 shadow-md">
         <div className="max-w-4xl mx-auto flex justify-between items-center px-4 py-3 border-b border-gray-200">
-			<img 
-			src={logoImage} 
-			alt="Dieter Logo" 
-			className="h-12 w-auto object-contain mx-4" 
-			/>
+          <img 
+            src={logoImage} 
+            alt="Dieter Logo" 
+            // Changed h-12 to h-24 (2x size)
+            className="h-24 w-auto object-contain mx-4" 
+          />
           
           <nav className="flex gap-6 text-teal-600 mx-2">
             {navItems.map((item) => (

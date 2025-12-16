@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import logoImage from './logo.png';
 
 /**
  * 로그인 및 회원가입 화면을 렌더링하는 컴포넌트입니다.
@@ -28,7 +29,11 @@ const Login = ({ onLogin, onSignup, error }) => {
       <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 border border-gray-200">
         <div className="text-center mb-8">
           {/* 타이틀 색상을 민트색 (teal-600)으로 변경 */}
-          <h1 className="text-4xl font-bold text-teal-600 mb-2">Dieter</h1>
+          <img 
+            src={logoImage} 
+            alt="Dieter Logo" 
+            className="h-32 w-auto mx-auto mb-4 object-contain" 
+          />
           <p className="text-gray-500">당신의 AI 영양 동반자.</p>
         </div>
 

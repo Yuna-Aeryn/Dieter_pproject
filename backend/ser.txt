@@ -1,34 +1,14 @@
-// ... inside app.post('/get-recommendation')
+// Login.jsx
 
-    // 3. Process the data (Apply the fix here)
-    if (recommendations && recommendations.length > 0) {
-        const safeList = recommendations.map(item => {
-            
-            // 🔥 FIX: Remove underscore and swap order
-            let cleanName = item.recommend_menu;
-            if (cleanName && cleanName.includes('_')) {
-                cleanName = cleanName.split('_').reverse().join(' ');
-            }
-
-            return {
-                menuName: cleanName, // Use the cleaned name
-                calories: extractNumber(item.calorie),
-                reason: item.reason,
-                score: extractNumber(item.score)
-            };
-        });
-
-        const combinedTitle = safeList.map((item, idx) => `${idx+1}. ${item.menuName}`).join(' / ');
-        
-        // Update reason text to use the clean name too
-        const combinedReason = safeList.map((item, idx) => 
-            `[${idx+1}위] ${item.menuName} (${item.calories}kcal)\n👉 ${item.reason}`
-        ).join('\n\n');
-
-        res.status(200).json({
-            menuName: combinedTitle,
-            calories: safeList[0].calories,
-            reason: combinedReason
-        });
-    } else {
-        // ...
+        <div className="text-center mb-8">
+          {/* REMOVED: <h1 className="text-4xl font-bold text-teal-600 mb-2">Dieter</h1> */}
+          
+          {/* ADDED: Logo (h-32 is very large for the main screen) */}
+          <img 
+            src={logoImage} 
+            alt="Dieter Logo" 
+            className="h-32 w-auto mx-auto mb-4 object-contain" 
+          />
+          
+          <p className="text-gray-500">당신의 AI 영양 동반자.</p>
+        </div>
