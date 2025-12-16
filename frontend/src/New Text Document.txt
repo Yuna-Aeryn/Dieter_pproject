@@ -1,23 +1,2 @@
-{
-  "name": "dieter-backend",
-  "version": "1.0.0",
-  "description": "Node.js backend for Dieter app",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
-  },
-  "dependencies": {
-    "axios": "^1.6.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "openai": "^4.0.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.0"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  }
-}
+// After
+<p className="text-sm text-teal-600 font-semibold">{recommendation.calories}</p>

@@ -577,7 +577,6 @@ const handleGetRecommendation = async () => {
               ) : recommendation ? (
                   <div className="space-y-2">
                     <h4 className="text-xl font-bold text-gray-800">{recommendation.menuName}</h4>
-                    <p className="text-sm text-teal-600 font-semibold">{recommendation.calories} kcal</p>
                     
                     {/* 🔥 [핵심 수정] 여기에 style 추가해서 줄바꿈(엔터) 적용됨 */}
                     <p className="text-gray-600" style={{ whiteSpace: "pre-wrap", lineHeight: "1.6" }}>

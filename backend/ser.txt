@@ -1,27 +1,26 @@
-// ... inside app.post('/get-recommendation', ...)
+// ... inside app.post('/get-recommendation')
 
-    // 2. 요청 보내기 (Request to Python)
-    const response = await axios.post(`${pythonBaseUrl}/recommend`, {
-      user_state: {
-          "rec_cal": 2500, 
-          ...req.body.currentIntake 
-      },
-      recent_food_names: foodList || []
-    });
-
-    // 🔥 [MISSING LINE] Extract the data from the response!
-    const recommendations = response.data; 
-
-    // Now 'recommendations' is defined, so this works:
+    // 3. Process the data (Apply the fix here)
     if (recommendations && recommendations.length > 0) {
-        const safeList = recommendations.map(item => ({
-            menuName: item.recommend_menu,
-            calories: extractNumber(item.calorie),
-            reason: item.reason,
-            score: extractNumber(item.score)
-        }));
+        const safeList = recommendations.map(item => {
+            
+            // 🔥 FIX: Remove underscore and swap order
+            let cleanName = item.recommend_menu;
+            if (cleanName && cleanName.includes('_')) {
+                cleanName = cleanName.split('_').reverse().join(' ');
+            }
+
+            return {
+                menuName: cleanName, // Use the cleaned name
+                calories: extractNumber(item.calorie),
+                reason: item.reason,
+                score: extractNumber(item.score)
+            };
+        });
 
         const combinedTitle = safeList.map((item, idx) => `${idx+1}. ${item.menuName}`).join(' / ');
+        
+        // Update reason text to use the clean name too
         const combinedReason = safeList.map((item, idx) => 
             `[${idx+1}위] ${item.menuName} (${item.calories}kcal)\n👉 ${item.reason}`
         ).join('\n\n');
@@ -32,6 +31,4 @@
             reason: combinedReason
         });
     } else {
-        res.status(200).json({ menuName: "추천 불가", calories: 0, reason: "조건에 맞는 메뉴가 없습니다." });
-    }
-// ...
+        // ...

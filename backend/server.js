@@ -218,12 +218,21 @@ app.post('/get-recommendation', async (req, res) => {
 	
     if (recommendations && recommendations.length > 0) {
         const safeList = recommendations.map(item => ({
-            menuName: item.recommend_menu,
-            calories: extractNumber(item.calorie),
-            reason: item.reason,
-            score: extractNumber(item.score)
+			
+			// 🔥 FIX: Remove underscore and swap order
+            let cleanName = item.recommend_menu;
+            if (cleanName && cleanName.includes('_')) {
+                cleanName = cleanName.split('_').reverse().join(' ');
+            }
+			
+            return {
+                menuName: cleanName, // Use the cleaned name
+                calories: extractNumber(item.calorie),
+                reason: item.reason,
+                score: extractNumber(item.score)
+            };
         }));
-
+	
         const combinedTitle = safeList.map((item, idx) => `${idx+1}. ${item.menuName}`).join(' / ');
         const combinedReason = safeList.map((item, idx) => 
             `[${idx+1}위] ${item.menuName} (${item.calories}kcal)\n👉 ${item.reason}`
