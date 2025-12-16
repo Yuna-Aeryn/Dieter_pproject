@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import logoImage from './logo.png'; 
 
 // 분리된 컴포넌트 import
 import Login from './Login'; 
 import MyPage from './MyPage'; 
 import Manager from './Manager'; 
+
 
 // Firebase Imports
 import { initializeApp } from 'firebase/app';
@@ -523,7 +525,11 @@ const handleGetRecommendation = async () => {
       <div className="min-h-screen bg-white p-0 font-inter text-gray-800">
         <header className="bg-teal-600 sticky top-0 z-10 shadow-lg">
           <div className="max-w-4xl mx-auto flex justify-between items-center px-4 py-3">
-            <h1 className="text-2xl font-bold text-white mx-4">DIETER 관리자</h1>
+            <img 
+			src={logoImage} 
+			alt="Dieter Admin" 
+			className="h-10 w-auto object-contain mx-4 bg-white rounded px-2" 
+			/>
             <button 
               onClick={handleLogout} 
               className="mx-4 text-sm text-red-500 border border-white hover:bg-teal-500 transition-colors duration-150 py-1 px-3 rounded-lg"
@@ -686,7 +692,11 @@ const handleGetRecommendation = async () => {
       
       <header className="bg-white sticky top-0 z-10 shadow-md">
         <div className="max-w-4xl mx-auto flex justify-between items-center px-4 py-3 border-b border-gray-200">
-          <h1 className="text-2xl font-bold text-teal-600 mx-4">Dieter</h1>
+			<img 
+			src={logoImage} 
+			alt="Dieter Logo" 
+			className="h-12 w-auto object-contain mx-4" 
+			/>
           
           <nav className="flex gap-6 text-teal-600 mx-2">
             {navItems.map((item) => (
