@@ -13,6 +13,7 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  updatePassword	,
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -20,7 +21,6 @@ import {
   addDoc,
   setDoc, 
   getDoc, 
-
   writeBatch,
   collection,
   query,
@@ -31,7 +31,7 @@ import {
   setLogLevel,
 }
   from 'firebase/firestore';
-
+  
 // --- Global Firebase & App Config ---
 const firebaseConfig = {
   apiKey: "AIzaSyCOggkRb4hF3gUT3Gf6aJXes3zm6_Yspzg",
@@ -551,6 +551,21 @@ const handleGetRecommendation = async () => {
     { name: '마이페이지', page: 'mypage' },
   ];
   
+  const handleUpdatePassword = async (newPassword) => {
+  if (!user) return;
+  try {
+    await updatePassword(user, newPassword);
+    alert("비밀번호가 성공적으로 변경되었습니다.");
+  } catch (err) {
+    console.error(err);
+    if (err.code === 'auth/requires-recent-login') {
+      alert("보안을 위해 로그아웃 후 다시 로그인해서 시도해주세요.");
+    } else {
+      alert("비밀번호 변경 실패: " + err.message);
+    }
+  }
+};
+  
   const renderPage = () => {
       
       const RecommendationContent = () => (
@@ -612,12 +627,13 @@ const handleGetRecommendation = async () => {
                 <MyPage 
                     user={user} 
                     userProfile={userProfile} 
-                    onUpdateProfile={handleUpdateProfile} 
+                    onUpdateProfile={handleUpdateProfile}
+					onUpdatePassword={handleUpdatePassword}						
                     onLogout={handleLogout} 
                     onReset={handleReset} 
                 />
               );
-              
+			                
           case 'recommend':
               return <RecommendationContent />;
               
