@@ -18,6 +18,8 @@ import {
   getFirestore,
   doc,
   addDoc,
+  setDoc, 
+  getDoc, 
   writeBatch,
   collection,
   query,
@@ -28,7 +30,6 @@ import {
   setLogLevel,
 }
   from 'firebase/firestore';
-
 
 // --- Global Firebase & App Config ---
 const firebaseConfig = {
@@ -41,14 +42,12 @@ const firebaseConfig = {
 };
 
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'dieter-app';
-
-// --- 관리자 정보 설정 ---
 const ADMIN_EMAIL = 'admin@dieter.com';
 
 // --- Firebase Initialization ---
 let app, auth, db;
 try {
-  app = initializeApp(firebaseConfig);
+  app = initializeApp(firebaseConfig); 
   auth = getAuth(app);
   db = getFirestore(app);
   setLogLevel('debug');
@@ -58,12 +57,12 @@ try {
 
 // --- STANDARD Recommended Daily Allowances (RDAs) ---
 const STANDARD_RDA = {
-  calories: 2000,
-  protein: 50, 
-  fat: 78, 
-  carbohydrates: 275, 
-  sodium: 2300, 
-  sugar: 50, 
+  male: {
+    calories: 2500, protein: 65, fat: 78, carbohydrates: 300, sodium: 2300, sugar: 50, 
+  },
+  female: {
+    calories: 2000, protein: 50, fat: 65, carbohydrates: 250, sodium: 2000, sugar: 40, 
+  }
 };
 
 // --- Helper Components ---
@@ -94,26 +93,31 @@ const Modal = ({ title, message, onClose }) => (
     </div>
   );
   
-  
-const DailySummaryContent = ({ totals }) => {
+const DailySummaryContent = ({ totals, userGender }) => {
+    const targetRDA = STANDARD_RDA[userGender] || STANDARD_RDA.male;
+    
     const nutItems = [
-      { name: '순탄수', key: 'carbohydrates', rda: 100, unit: 'g' }, 
-      { name: '단백질', key: 'protein', rda: 120, unit: 'g' }, 
-      { name: '지방', key: 'fat', rda: 50, unit: 'g' }, 
-      { name: '당류', key: 'sugar', rda: 50, unit: 'g' },
-      { name: '나트륨', key: 'sodium', rda: 2000, unit: 'mg' }, 
-    ].map(item => ({
+      { name: '칼로리', key: 'calories', rda: targetRDA.calories, unit: 'kcal' }, 
+      { name: '탄수화물', key: 'carbohydrates', rda: targetRDA.carbohydrates, unit: 'g' }, 
+      { name: '단백질', key: 'protein', rda: targetRDA.protein, unit: 'g' }, 
+      { name: '지방', key: 'fat', rda: targetRDA.fat, unit: 'g' }, 
+      { name: '당류', key: 'sugar', rda: targetRDA.sugar, unit: 'g' },
+      { name: '나트륨', key: 'sodium', rda: targetRDA.sodium, unit: 'mg' }, 
+    ].filter(item => item.key !== 'calories').map(item => ({ 
       ...item,
       value: totals[item.key] || 0,
-      rda: item.rda 
     }));
   
+    const calorieItem = STANDARD_RDA[userGender].calories;
+
     return (
       <div className="bg-teal-100 p-4 rounded-xl shadow-lg text-gray-800 border border-teal-200">
         <div className="flex items-center mb-4">
           <div className="bg-white text-teal-600 rounded-full w-20 h-20 flex flex-col items-center justify-center p-2 mr-4 font-bold shadow-md">
-            <span className="text-3xl">{Math.round(totals.calories)}</span>
-            <span className="text-xs font-medium">kcal</span>
+            <span className="text-xl font-bold">
+              {Math.round(totals.calories)}
+            </span>
+            <span className="text-xs font-medium">/ {calorieItem} kcal</span>
           </div>
         </div>
   
@@ -139,7 +143,6 @@ const DailySummaryContent = ({ totals }) => {
       </div>
     );
   };
-  
   
 const FoodList = ({ foodEntries }) => (
     <div className="p-0 mt-4">
@@ -171,7 +174,10 @@ const FoodList = ({ foodEntries }) => (
     </div>
   );
   
-const FoodInputForm = ({ textInput, setTextInput, handleTextInput, handleImageUpload, isLoadingImage }) => {
+const FoodInputForm = ({ textInput, setTextInput, handleTextInput, handleImageUpload, isLoadingImage, isLoadingText }) => {
+    
+    const isDisabled = isLoadingImage || isLoadingText;
+
     return (
       <div className="mt-6 p-4 bg-white rounded-xl shadow-inner border border-gray-200">
         <form onSubmit={handleTextInput} className="flex items-center space-x-2">
@@ -179,9 +185,9 @@ const FoodInputForm = ({ textInput, setTextInput, handleTextInput, handleImageUp
               type="text"
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
-              placeholder="오늘 먹은 음식을 텍스트로 입력하세요..."
-              className="flex-grow p-2 text-gray-800 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-              disabled={isLoadingImage}
+              placeholder="음식명 또는 '떡볶이 1인분'을 입력하세요."
+              className="flex-grow p-2 border border-gray-300 rounded-lg focus:ring-teal-500 focus:border-teal-500"
+              disabled={isDisabled} 
             />
             
             <input 
@@ -190,7 +196,7 @@ const FoodInputForm = ({ textInput, setTextInput, handleTextInput, handleImageUp
               className="sr-only" 
               accept="image/*" 
               onChange={(e) => handleImageUpload(e.target.files[0])} 
-              disabled={isLoadingImage} 
+              disabled={isDisabled} 
             />
             
             <label htmlFor="image-file-upload" className="cursor-pointer p-2 rounded-lg hover:bg-gray-100 transition-colors">
@@ -203,15 +209,23 @@ const FoodInputForm = ({ textInput, setTextInput, handleTextInput, handleImageUp
               )}
             </label>
             
-            <button type="submit" className="bg-teal-600 p-2 rounded-lg hover:bg-teal-700 transition-colors" disabled={isLoadingImage || !textInput.trim()}>
-              <svg className="w-6 h-6 transform rotate-90 text-teal-600" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-              </svg>
+            <button 
+              type="submit" 
+              className={`p-2 rounded-lg transition-colors ${isDisabled || !textInput.trim() ? 'bg-gray-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'}`} 
+              disabled={isDisabled || !textInput.trim()} 
+            >
+              {isLoadingText ? (
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+              ) : (
+                <svg className="w-6 h-6 transform rotate-90 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+              )}
             </button>
         </form>
       </div>
     );
-  };
+};
   
 
 // --- MAIN APP ---
@@ -219,26 +233,51 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [foodEntries, setFoodEntries] = useState([]);
-  const [userProfile, setUserProfile] = useState({ gender: 'male', height: 170, weight: 65 }); 
+  
+  const [userProfile, setUserProfile] = useState({ 
+    username: '', 
+    gender: 'male' 
+  }); 
+  
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [error, setError] = useState(null);
   const [authError, setAuthError] = useState(null); 
   const [textInput, setTextInput] = useState(''); 
-  const [currentPage, setCurrentPage] = useState('home'); 
+
+  const [isLoadingText, setIsLoadingText] = useState(false); 
+  
+  const [currentPage, setCurrentPage] = useState('recommend'); 
   
   const [recommendation, setRecommendation] = useState(null); 
   const [isLoadingRec, setIsLoadingRec] = useState(false);
   const recommendationTimerRef = useRef(null);
 
-  // 관리자 상태 추가
   const [isAdmin, setIsAdmin] = useState(false);
 
   // --- Auth Logic ---
   useEffect(() => {
     if (!auth) return;
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setIsAdmin(currentUser && currentUser.email === ADMIN_EMAIL);
+      
+      if (currentUser) {
+        try {
+            const userDocRef = doc(db, `artifacts/${appId}/users/${currentUser.uid}`);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+                const data = userDoc.data();
+                setUserProfile(prev => ({ ...prev, gender: data.gender || 'male', username: data.username || '' })); 
+            } else {
+                setUserProfile(prev => ({ ...prev, gender: 'male' }));
+            }
+        } catch (err) {
+            console.error("프로필 불러오기 오류:", err);
+        }
+      } else {
+        setUserProfile({ username: '', gender: 'male' });
+      }
+
       setIsAuthReady(true);
     });
     return () => unsubscribe();
@@ -254,10 +293,18 @@ export default function App() {
     }
   };
 
-  const handleSignup = async (email, password) => {
+  const handleSignup = async (email, password, username) => {
     setAuthError(null);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      await setDoc(doc(db, `artifacts/${appId}/users/${user.uid}`), {
+        username: username,
+        email: email,
+        gender: 'male',
+        createdAt: Timestamp.now()
+      });
     } catch (err) {
       setAuthError(err.message.replace('Firebase: ', ''));
       console.error(err);
@@ -269,16 +316,27 @@ export default function App() {
       await signOut(auth);
       setFoodEntries([]); 
       setRecommendation(null);
-      setCurrentPage('home'); 
+      setCurrentPage('recommend'); 
       setIsAdmin(false);
     } catch (err) {
       setError("로그아웃 실패: " + err.message);
     }
   };
 
-  const handleUpdateProfile = (newProfileData) => {
+  const handleUpdateProfile = async (newProfileData) => {
     setUserProfile(prev => ({ ...prev, ...newProfileData }));
-    console.log("프로필 업데이트:", newProfileData);
+    
+    if (user) {
+        try {
+            const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}`);
+            await setDoc(userDocRef, newProfileData, { merge: true });
+            handleGetRecommendation(); 
+
+        } catch (err) {
+            console.error("프로필 업데이트 오류:", err);
+            setError("프로필 저장 실패: " + err.message);
+        }
+    }
   };
 
 
@@ -317,7 +375,7 @@ export default function App() {
       reader.readAsDataURL(file);
       reader.onload = async () => {
         const base64ImageData = reader.result.split(',')[1];
-        const response = await fetch('https://schoolstuff-lj67.onrender.com/analyze-image', {
+        const response = await fetch('http://localhost:3001/analyze-image', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64: base64ImageData, mimeType: file.type }),
         });
@@ -331,11 +389,42 @@ export default function App() {
   };
   
   const handleTextInput = async (e) => {
-      e.preventDefault();
-      if (!textInput.trim()) return;
-      console.log(`Sending text for analysis: ${textInput}`);
-      setTextInput('');
-  };
+    e.preventDefault();
+    if (!textInput.trim() || isLoadingImage || isLoadingText) return; 
+
+    setIsLoadingText(true); 
+    setError(null);
+    
+    const input = textInput.trim();
+    setTextInput(''); 
+    
+    try {
+        console.log(`📤 Sending text for analysis: ${input}`);
+        
+        const response = await fetch('http://localhost:3001/analyze-text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: input }), 
+        });
+
+        if (!response.ok) throw new Error('텍스트 분석 백엔드 실패');
+        
+        const foodData = await response.json();
+        
+        if (db && user) {
+            await addDoc(collection(db, `artifacts/${appId}/users/${user.uid}/foodEntries`), { 
+                ...foodData, 
+                timestamp: Timestamp.now() 
+            });
+            console.log("✅ Text Analysis & Record Success:", foodData.foodName);
+        }
+    } catch (err) { 
+        setError("텍스트 분석 및 기록에 실패했습니다: " + err.message); 
+        console.error("Text Analysis Error:", err);
+    } finally { 
+        setIsLoadingText(false); 
+    }
+};
 
   const handleReset = async () => {
     if (!db || !user) return;
@@ -351,10 +440,10 @@ export default function App() {
     } catch (err) { setError("초기화 실패: " + err.message); }
   };
 
-  // --- 🚀 FIXED: Removed the blocking 'if (isLoadingRec) return;' check ---
+  // --- Recommendation Handler ---
   const handleGetRecommendation = async () => {
-    // 🛑 이전에 있던 'if (isLoadingRec) return;' 코드를 제거했습니다.
-    // useEffect에서 이미 isLoadingRec(true)를 설정하므로 이 체크가 있으면 항상 함수가 멈추게 됩니다.
+    if (foodEntries.length === 0) return; 
+    
     setIsLoadingRec(true);
     setRecommendation(null); 
     try {
@@ -364,12 +453,12 @@ export default function App() {
         ...dailyTotals,
         carbs: dailyTotals.carbohydrates 
       };
-
-      const response = await fetch('https://schoolstuff-lj67.onrender.com/get-recommendation', {
+      
+      const response = await fetch('http://localhost:3001/get-recommendation', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           foodList: foodListArray, 
-          currentIntake: currentIntake, 
+          currentIntake: currentIntake,
           gender: userProfile.gender 
         }),
       });
@@ -385,18 +474,20 @@ export default function App() {
     }
   };
 
+  // --- Auto-trigger Effect ---
   useEffect(() => {
     if (!isAuthReady || !user || isAdmin) return; 
     if (recommendationTimerRef.current) clearTimeout(recommendationTimerRef.current);
     
-    // Only auto-trigger if there is food logged
     if (foodEntries.length > 0) {
         setIsLoadingRec(true);
-        // 타이머 활성화 (3초 뒤 실행)
         recommendationTimerRef.current = setTimeout(() => handleGetRecommendation(), 3000);
+    } else {
+        setRecommendation(null);
+        setIsLoadingRec(false);
     }
     return () => clearTimeout(recommendationTimerRef.current);
-  }, [dailyTotals, isAuthReady, user, isAdmin]);
+  }, [dailyTotals, userProfile.gender, isAuthReady, user, isAdmin]); 
 
   
   if (!isAuthReady) return <div className="flex justify-center items-center h-screen bg-white"><LoadingSpinner /></div>;
@@ -415,9 +506,9 @@ export default function App() {
             <h1 className="text-2xl font-bold text-white mx-4">DIETER 관리자</h1>
             <button 
               onClick={handleLogout} 
-              className="mx-4 text-sm text-teal-600 border border-white hover:bg-teal-500 transition-colors duration-150 py-1 px-3 rounded-lg"
+              className="mx-4 text-sm text-red-500 border border-white hover:bg-teal-500 transition-colors duration-150 py-1 px-3 rounded-lg"
             >
-              로그아웃 (관리자)
+              로그아웃
             </button>
           </div>
         </header>
@@ -433,9 +524,9 @@ export default function App() {
   // 🚀 User Render
 
   const navItems = [
-    { name: '홈', page: 'home' },
-    { name: '메뉴 추천', page: 'recommend' }, 
-    { name: '기록', page: 'record' }, 
+    { name: '추천 메뉴', page: 'recommend' }, 
+    { name: '식단 입력', page: 'home' }, 
+    { name: '상세 기록', page: 'record' }, 
     { name: '마이페이지', page: 'mypage' },
   ];
   
@@ -443,29 +534,53 @@ export default function App() {
       
       const RecommendationContent = () => (
           <div className="bg-white p-6 rounded-2xl shadow-xl border border-gray-200">
-              <h3 className="text-xl font-bold text-teal-600 mb-4">오늘의 식단 추천</h3>
-              <div className="min-h-[150px] flex flex-col justify-between">
-                  {isLoadingRec ? (
-                      <LoadingSpinner />
-                  ) : recommendation ? (
-                      <div className="space-y-2">
-                          <h4 className="text-xl font-bold text-gray-800">{recommendation.menuName}</h4>
-                          <p className="text-sm text-teal-600 font-semibold">{recommendation.calories} kcal</p>
-                          <p className="text-gray-600">{recommendation.reason}</p>
-                      </div>
-                  ) : (
-                      <p className="text-gray-500 text-center py-8">
-                          현재까지의 식단 정보를 바탕으로 맞춤형 추천 메뉴를 받아보세요.
-                      </p>
-                  )}
+            <h3 className="text-xl font-bold text-teal-600 mb-4">오늘의 식단 추천</h3>
+            <div className="min-h-[150px] flex flex-col justify-between">
+              {isLoadingRec ? (
+                  <LoadingSpinner />
+              ) : recommendation ? (
+                  <div className="space-y-2">
+                    <h4 className="text-xl font-bold text-gray-800">{recommendation.menuName}</h4>
+                    <p className="text-sm text-teal-600 font-semibold">{recommendation.calories} kcal</p>
+                    
+                    {/* 🔥 [핵심 수정] 여기에 style 추가해서 줄바꿈(엔터) 적용됨 */}
+                    <p className="text-gray-600" style={{ whiteSpace: "pre-wrap", lineHeight: "1.6" }}>
+                        {recommendation.reason}
+                    </p>
+
+                  </div>
+              ) : (
+                  <p className="text-gray-500 text-center py-8">
+                    현재까지의 식단 정보를 바탕으로 맞춤형 추천 메뉴를 받아보세요.
+                  </p>
+              )}
+              
+              <div className="space-y-2 mt-6">
+                <div className="flex justify-between items-center gap-4">
+                  
                   <button
                       onClick={handleGetRecommendation}
-                      disabled={isLoadingRec}
-                      className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md mt-6 disabled:opacity-50"
+                      disabled={isLoadingRec || foodEntries.length === 0} 
+                      className="flex-1 bg-teal-600 hover:bg-teal-700 text-teal-600 font-bold py-3 rounded-lg transition-colors shadow-md"
                   >
-                      {isLoadingRec ? '분석 중...' : '맞춤 메뉴 추천받기'}
+                    {isLoadingRec ? '분석 중...' : '맞춤 메뉴 추천받기'}
                   </button>
+                  
+                  <button
+                      onClick={() => setCurrentPage('home')}
+                      className="text-teal-600 bg-white border border-teal-600 hover:bg-teal-50 font-bold py-3 px-4 rounded-lg transition-colors shadow-md"
+                  >
+                    식단 입력하러 가기
+                  </button>
+                </div>
+                
+                {foodEntries.length === 0 && (
+                  <p className="text-red-500 text-center text-sm font-medium mt-2">
+                    입력된 식단이 없으면 추천이 불가해요
+                  </p>
+                )}
               </div>
+            </div>
           </div>
       );
 
@@ -488,8 +603,8 @@ export default function App() {
           case 'record': 
               return (
                   <div className="space-y-6">
-                      <h2 className="text-2xl font-bold text-gray-800">나의 식단 상세 기록</h2>
-                      <FoodList foodEntries={foodEntries} />
+                    <h2 className="text-2xl font-bold text-gray-800">나의 식단 상세 기록</h2>
+                    <FoodList foodEntries={foodEntries} />
                   </div>
               );
 
@@ -497,31 +612,31 @@ export default function App() {
           default:
               return (
                   <div className="space-y-8">
-                      <div className="p-0">
-                             <h2 className="text-2xl font-bold text-gray-800 mb-4">오늘의 영양 상태</h2>
-                             <DailySummaryContent totals={dailyTotals} />
-                      </div>
+                    <div className="p-0">
+                            <h2 className="text-2xl font-bold text-gray-800 mb-4">오늘의 영양 상태</h2>
+                            <DailySummaryContent totals={dailyTotals} userGender={userProfile.gender} />
+                    </div>
 
-                      <div className="p-0">
-                          <h2 className="text-2xl font-bold text-gray-800 mb-4">식단 기록하기</h2>
-                          <FoodInputForm 
-                              textInput={textInput} 
-                              setTextInput={setTextInput} 
-                              handleTextInput={handleTextInput} 
-                              handleImageUpload={handleImageUpload} 
-                              isLoadingImage={isLoadingImage} 
-                          />
-                      </div>
+                    <div className="p-0">
+                      <h2 className="text-2xl font-bold text-gray-800 mb-4">식단 기록하기</h2>
+                      <FoodInputForm 
+                        textInput={textInput} 
+                        setTextInput={setTextInput} 
+                        handleTextInput={handleTextInput} 
+                        handleImageUpload={handleImageUpload} 
+                        isLoadingImage={isLoadingImage} 
+                        isLoadingText={isLoadingText} 
+                      />
+                    </div>
 
-                      {/* --- 리셋 버튼 이동 --- */}
-                      <div className="flex justify-center mt-8 pb-8">
-                        <button
-                            onClick={handleReset}
-                            className="text-sm text-gray-400 hover:text-red-500 underline transition-colors"
-                        >
-                            일일 식단 리셋
-                        </button>
-                      </div>
+                    <div className="flex justify-center mt-8 pb-8">
+                      <button
+                          onClick={handleReset}
+                          className="text-sm text-gray-400 hover:text-red-500 underline transition-colors hover:border-1 hover:border-teal-500 rounded p-1"
+                      >
+                          일일 식단 리셋
+                      </button>
+                    </div>
                   </div>
               );
       }
@@ -542,6 +657,7 @@ export default function App() {
                 <button
                     key={item.page}
                     onClick={() => setCurrentPage(item.page)}
+                    
                     className={`font-semibold transition-colors duration-150 ${
                         currentPage === item.page ? 'text-teal-600 border-b-2 border-teal-600' : 'hover:text-teal-500'
                     }`}
@@ -551,13 +667,7 @@ export default function App() {
             ))}
           </nav>
 
-          {/* --- 로그아웃 버튼 복원 --- */}
-          <button 
-            onClick={handleLogout} 
-            className="mx-4 text-sm text-gray-500 hover:text-red-600 transition-colors duration-150 py-1 px-3 border border-gray-300 rounded-lg"
-          >
-            로그아웃
-          </button>
+          <div className="w-16"></div> 
         </div>
       </header>
 
