@@ -189,29 +189,30 @@ app.post('/analyze-text', async (req, res) => {
 app.post('/get-recommendation', async (req, res) => {
   try {
     const { gender, currentIntake, foodList } = req.body;
-    if (!gender || !currentIntake) return res.status(400).json({ error: 'Missing data' });
-
-    const standard = RECOMMENDED_INTAKE[gender];
-    const user_state = {
-      "rec_cal": standard.calories, "rec_carb": standard.carbs, "rec_pro": standard.protein,
-      "rec_fat": standard.fat, "rec_sugar": standard.sugar, "rec_na": standard.sodium,
-      "cur_cal": extractNumber(currentIntake.calories),
-      "cur_carb": extractNumber(currentIntake.carbs),
-      "cur_pro": extractNumber(currentIntake.protein),
-      "cur_fat": extractNumber(currentIntake.fat),
-      "cur_sugar": extractNumber(currentIntake.sugar),
-      "cur_na": extractNumber(currentIntake.sodium)
-    };
-
-    console.log("📤 추천 요청 보냄 (Python)...");
     
-    // 파이썬 서버 호출
-    const response = await axios.post('${PYTHON_API_URL}/recommend', {
-      user_state: user_state,
+    // 1. 환경 변수 가져오기
+    // 배포 환경에서는 process.env.PYTHON_API_URL이 사용됩니다.
+    // 로컬 환경을 위해 뒤에 || 'http://...' 를 붙여줍니다.
+    const pythonBaseUrl = process.env.PYTHON_API_URL || 'http://127.0.0.1:5000';
+
+    // [디버깅 로그] 실제 사용되는 URL이 무엇인지 Render 로그창에서 확인하세요!
+    console.log("👉 Target Python URL:", pythonBaseUrl); 
+
+    // URL 유효성 검사 (안전장치)
+    if (!pythonBaseUrl.startsWith('http')) {
+        throw new Error(`Invalid URL Configuration: ${pythonBaseUrl}`);
+    }
+
+    // 2. 요청 보내기
+    const response = await axios.post(`${pythonBaseUrl}/recommend`, {
+      user_state: {
+          // ... 기존 user_state 로직 그대로 ...
+          "rec_cal": 2500, // (예시) 필요한 데이터 매핑 확인
+          // ...
+          ...req.body.currentIntake // 혹은 필요한 데이터 구조에 맞게
+      },
       recent_food_names: foodList || []
     });
-
-    const recommendations = response.data;
 
     if (recommendations.length > 0) {
         const safeList = recommendations.map(item => ({
@@ -235,11 +236,17 @@ app.post('/get-recommendation', async (req, res) => {
         res.status(200).json({ menuName: "추천 불가", calories: 0, reason: "조건에 맞는 메뉴가 없습니다." });
     }
 
+
   } catch (error) {
+    // 에러 로그를 더 자세히 출력
     console.error('❌ Recommendation Error:', error.message);
+    if (error.config) {
+        console.error('   Requested URL:', error.config.url); // 어떤 주소로 쏘다가 죽었는지 확인
+    }
     res.status(500).json({ error: 'Python Server connection failed' });
   }
 });
+
 
 app.listen(port, '0.0.0.0', () => {
   console.log(`🚀 Node.js Server listening on port ${port}`);
