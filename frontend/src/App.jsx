@@ -528,7 +528,7 @@ const handleGetRecommendation = async () => {
             <img 
 			src={logoImage} 
 			alt="Dieter Admin" 
-			className="mx-4 text-sm text-red-500 border border-white hover:bg-teal-500 transition-colors duration-150 py-1 px-3 rounded-lg"
+			className="h-24 text-sm text-red-500 border border-white hover:bg-teal-500 transition-colors duration-150 py-1 px-3 rounded-lg"
 			/>
             <button 
               onClick={handleLogout} 

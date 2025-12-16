@@ -32,7 +32,7 @@ const Login = ({ onLogin, onSignup, error }) => {
           <img 
             src={logoImage} 
             alt="Dieter Logo" 
-            className="h-32 w-auto mx-auto mb-4 object-contain" 
+            className="h-64 w-auto mx-auto mb-4 object-contain" 
           />
           <p className="text-gray-500">당신의 AI 영양 동반자.</p>
         </div>
