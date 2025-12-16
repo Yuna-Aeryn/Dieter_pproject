@@ -111,7 +111,7 @@ app.post('/get-recommendation', async (req, res) => {
     console.log("📤 Requesting Recommendation from Python...");
     
     // 파이썬 서버 호출
-    const response = await axios.post('http://127.0.0.1:5000/recommend', {
+    const response = await axios.post('https://dieter-pproject-ai-server.onrender.com/recommend', {
       user_state: user_state,
       recent_food_names: foodList || []
     });
