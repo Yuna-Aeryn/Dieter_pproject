@@ -1,22 +1,30 @@
 import React, { useState } from 'react';
 
 // MyPage 컴포넌트는 App.js에서 필요한 데이터와 함수를 prop으로 받습니다.
-const MyPage = ({ user, userProfile, onUpdateProfile, onLogout, onReset }) => {
+const MyPage = ({ user, userProfile, onUpdateProfile, onUpdatePassword, onLogout, onReset }) => {
   const [gender, setGender] = useState(userProfile.gender || 'male');
   const [email, setEmail] = useState(user?.email || '테스트 사용자'); 
   const [newPassword, setNewPassword] = useState('');
   
-  const handleSave = () => {
+const handleSave = () => {
+    // 1. Update Profile (Gender) - Always runs
     onUpdateProfile({ 
         gender: gender,
     });
-    
-    if (email !== user?.email || newPassword) {
-        alert('신체 정보(성별)는 저장되었으나, 계정 정보(이메일/비밀번호)는 실제 Firebase 인증 로직이 필요합니다.');
+
+    // 2. Update Password (only if typed)
+    if (newPassword.trim() !== '') {
+        // Call the function passed from App.js
+        onUpdatePassword(newPassword);
+        setNewPassword(''); // Clear the field after saving
     } else {
-        alert('사용자 정보가 저장되었습니다.');
+        // If only gender was changed, show a simple success message
+        // (If password was changed, App.js handles the alert)
+        alert('프로필 정보가 저장되었습니다.'); 
     }
-    setNewPassword('');
+    
+    // Note: Email update logic is not yet implemented in App.js, 
+    // so we ignore the email field for now.
   };
 
   return (
@@ -46,7 +54,7 @@ const MyPage = ({ user, userProfile, onUpdateProfile, onLogout, onReset }) => {
                     <select
                         value={gender}
                         onChange={(e) => setGender(e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md mt-2"
                     >
                         <option value="male">남성</option>
                         <option value="female">여성</option>
