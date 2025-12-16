@@ -2,34 +2,31 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const OpenAI = require('openai'); // OpenAI 불러오기
 
 const app = express();
 const port = 3001;
 
 // CORS 설정
 app.use(cors({ origin: 'https://dieter01.netlify.app' }));
-app.use(express.json({ limit: '10mb' }));
 
-// ----------------------------------------------------------------
-// 1. Gemini 설정 (이미지 분석용)
-// ----------------------------------------------------------------
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-if (!GEMINI_API_KEY) {
-  console.error('❌ GEMINI_API_KEY가 .env 파일에 없습니다!');
+// --- OpenAI 설정 ---
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+if (!OPENAI_API_KEY) {
+  console.error('❌ OPENAI_API_KEY가 없습니다. .env 파일을 확인하세요!');
   process.exit(1);
 }
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-// 모델: 프리뷰 버전 (만약 503 에러 자주 뜨면 'gemini-1.5-flash'로 변경 추천)
-const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-09-2025' });
 
-// 권장 섭취량
+const openai = new OpenAI({
+  apiKey: OPENAI_API_KEY,
+});
+
 const RECOMMENDED_INTAKE = {
   male: { calories: 2500, carbs: 324, protein: 60, fat: 54, sugar: 50, sodium: 2000 },
   female: { calories: 2000, carbs: 270, protein: 50, fat: 45, sugar: 50, sodium: 2000 }
 };
 
-// 🔥 [필수] 개떡 같은 데이터에서 숫자만 뽑아내는 함수 (방탄조끼)
+// 🔥 숫자만 추출하는 함수 (안전장치)
 function extractNumber(value) {
     if (typeof value === 'number') return value;
     if (!value) return 0;
@@ -39,47 +36,79 @@ function extractNumber(value) {
 }
 
 // ----------------------------------------------------------------
-// 2. 이미지 분석 API (Gemini 사용)
+// 1. 이미지 분석 API (GPT-4o Vision)
 // ----------------------------------------------------------------
 app.post('/analyze-image', async (req, res) => {
   try {
     const { imageBase64, mimeType } = req.body;
     if (!imageBase64 || !mimeType) return res.status(400).json({ error: 'Missing image' });
     
-    console.log("📤 Sending image to Gemini...");
+    console.log("📤 GPT-4o에게 사진 분석 요청 중...");
 
-    const imagePart = { inlineData: { data: imageBase64, mimeType: mimeType } };
-    const prompt = "이 음식 사진을 분석하여 다음 JSON으로 반환: foodName(한국어), calories, nutrients(protein, fat, carbohydrates, sugar, sodium). 오직 JSON만 출력해.";
-    
-    const result = await model.generateContent([prompt, imagePart]);
-    const text = result.response.text();
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { 
+              type: "text", 
+              text: `
+                이 음식 사진을 분석해줘.
+                1. 음식 이름은 한국어로 적어줘.
+                2. 영양소(칼로리, 탄수화물, 단백질, 지방, 당류, 나트륨)를 추정해줘.
+                
+                [중요] 응답은 무조건 아래 JSON 형식(Key는 영어)을 지켜야 해:
+                {
+                    "foodName": "음식이름(한국어)",
+                    "calories": 숫자,
+                    "nutrients": {
+                        "protein": 숫자,
+                        "fat": 숫자,
+                        "carbohydrates": 숫자,
+                        "sugar": 숫자,
+                        "sodium": 숫자
+                    }
+                }
+                단위(g, kcal)나 설명은 빼고 숫자만 넣어.
+              `
+            },
+            {
+              type: "image_url",
+              image_url: {
+                "url": `data:${mimeType};base64,${imageBase64}`,
+              },
+            },
+          ],
+        },
+      ],
+      response_format: { type: "json_object" }, 
+    });
 
-    // JSON 파싱
-    let jsonText = text.match(/```json([\s\S]*)```/)?.[1] || text.match(/\{[\s\S]*\}/)?.[0] || text;
-    const jsonData = JSON.parse(jsonText.replace(/[^\S \t\r\n\f\v{}[\]":,0-9.truefalsenull-가-힣a-zA-Z]/g, ''));
-    
-    console.log("✅ Gemini Analysis Result:", jsonData.foodName);
+    const content = response.choices[0].message.content;
+    console.log("✅ GPT-4o 응답(이미지):", content);
 
-    // 🔥 숫자 강제 변환 (Gemini가 '약 300kcal'라고 해도 300으로 저장)
+    const jsonData = JSON.parse(content);
+
+    // GPT가 혹시라도 한글 키를 줄까 봐 2중, 3중으로 받아주는 안전장치
     const safeData = {
-        foodName: jsonData.foodName || "음식명 없음",
-        calories: extractNumber(jsonData.calories),
+        foodName: jsonData.foodName || jsonData['음식 이름'] || "음식명 없음",
+        calories: extractNumber(jsonData.calories || jsonData['칼로리']),
         nutrients: {
-            protein: extractNumber(jsonData.nutrients?.protein),
-            fat: extractNumber(jsonData.nutrients?.fat),
-            carbohydrates: extractNumber(jsonData.nutrients?.carbohydrates),
-            sugar: extractNumber(jsonData.nutrients?.sugar),
-            sodium: extractNumber(jsonData.nutrients?.sodium)
+            protein: extractNumber(jsonData.nutrients?.protein || jsonData['영양소']?.['단백질']),
+            fat: extractNumber(jsonData.nutrients?.fat || jsonData['영양소']?.['지방']),
+            carbohydrates: extractNumber(jsonData.nutrients?.carbohydrates || jsonData['영양소']?.['탄수화물']),
+            sugar: extractNumber(jsonData.nutrients?.sugar || jsonData['영양소']?.['당류']),
+            sodium: extractNumber(jsonData.nutrients?.sodium || jsonData['영양소']?.['나트륨'])
         }
     };
 
     res.status(200).json(safeData);
 
   } catch (error) {
-    console.error('❌ Image Analysis Error:', error.message);
-    // 구글 서버 터지거나 에러 나도 프론트엔드 안 죽게 '가짜 데이터' 전송
+    console.error('❌ Image Analysis Error:', error);
     res.status(200).json({
-        foodName: "분석 지연(다시 시도)",
+        foodName: "분석 실패 (오류)",
         calories: 0,
         nutrients: { protein: 0, fat: 0, carbohydrates: 0, sugar: 0, sodium: 0 }
     });
@@ -87,7 +116,72 @@ app.post('/analyze-image', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
-// 3. 메뉴 추천 API (Python 연결 + 3개 다 보여주기)
+// 2. 텍스트 분석 API (GPT-4o Text)
+// ----------------------------------------------------------------
+app.post('/analyze-text', async (req, res) => {
+    try {
+        const { text } = req.body;
+        if (!text) return res.status(400).json({ error: 'Text required' });
+
+        console.log(`📝 GPT-4o 텍스트 분석 요청: "${text}"`);
+
+        const prompt = `
+            사용자가 입력한 음식 텍스트: "${text}"
+            
+            이 내용을 바탕으로 음식 이름(한국어)과 영양소를 추정해줘.
+            양이 명시되어 있다면(예: 2인분, 두 그릇) 영양소를 곱해서 계산해줘.
+
+            [중요] 응답은 무조건 아래 JSON 형식(Key는 영어)을 지켜야 해:
+            {
+                "foodName": "음식이름 (양 포함)",
+                "calories": 숫자,
+                "nutrients": {
+                    "protein": 숫자,
+                    "fat": 숫자,
+                    "carbohydrates": 숫자,
+                    "sugar": 숫자,
+                    "sodium": 숫자
+                }
+            }
+        `;
+
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" },
+        });
+
+        const content = response.choices[0].message.content;
+        console.log("✅ GPT-4o 응답(텍스트):", content);
+        
+        const jsonData = JSON.parse(content);
+
+        const safeData = {
+            foodName: jsonData.foodName || jsonData['음식 이름'] || text,
+            calories: extractNumber(jsonData.calories || jsonData['칼로리']),
+            nutrients: {
+                protein: extractNumber(jsonData.nutrients?.protein || jsonData['영양소']?.['단백질']),
+                fat: extractNumber(jsonData.nutrients?.fat || jsonData['영양소']?.['지방']),
+                carbohydrates: extractNumber(jsonData.nutrients?.carbohydrates || jsonData['영양소']?.['탄수화물']),
+                sugar: extractNumber(jsonData.nutrients?.sugar || jsonData['영양소']?.['당류']),
+                sodium: extractNumber(jsonData.nutrients?.sodium || jsonData['영양소']?.['나트륨'])
+            }
+        };
+
+        res.status(200).json(safeData);
+
+    } catch (error) {
+        console.error('❌ Text Analysis Error:', error);
+        res.status(200).json({
+            foodName: "검색 실패",
+            calories: 0,
+            nutrients: { protein: 0, fat: 0, carbohydrates: 0, sugar: 0, sodium: 0 }
+        });
+    }
+});
+
+// ----------------------------------------------------------------
+// 3. 메뉴 추천 API (파이썬 연결 - 기존 유지)
 // ----------------------------------------------------------------
 app.post('/get-recommendation', async (req, res) => {
   try {
@@ -95,8 +189,6 @@ app.post('/get-recommendation', async (req, res) => {
     if (!gender || !currentIntake) return res.status(400).json({ error: 'Missing data' });
 
     const standard = RECOMMENDED_INTAKE[gender];
-    
-    // 파이썬으로 보낼 데이터 (숫자만 추출)
     const user_state = {
       "rec_cal": standard.calories, "rec_carb": standard.carbs, "rec_pro": standard.protein,
       "rec_fat": standard.fat, "rec_sugar": standard.sugar, "rec_na": standard.sodium,
@@ -108,7 +200,7 @@ app.post('/get-recommendation', async (req, res) => {
       "cur_na": extractNumber(currentIntake.sodium)
     };
 
-    console.log("📤 Requesting Recommendation from Python...");
+    console.log("📤 추천 요청 보냄 (Python)...");
     
     // 파이썬 서버 호출
     const response = await axios.post('https://dieter-pproject-ai-server.onrender.com/recommend', {
@@ -117,10 +209,8 @@ app.post('/get-recommendation', async (req, res) => {
     });
 
     const recommendations = response.data;
-    console.log("📥 Recommendations Received:", recommendations.length);
 
     if (recommendations.length > 0) {
-        // 데이터 정리
         const safeList = recommendations.map(item => ({
             menuName: item.recommend_menu,
             calories: extractNumber(item.calorie),
@@ -128,7 +218,6 @@ app.post('/get-recommendation', async (req, res) => {
             score: extractNumber(item.score)
         }));
 
-        // 🔥 [핵심] 프론트엔드 UI 하나에 3개 정보를 텍스트로 합쳐서 보여주기
         const combinedTitle = safeList.map((item, idx) => `${idx+1}. ${item.menuName}`).join(' / ');
         const combinedReason = safeList.map((item, idx) => 
             `[${idx+1}위] ${item.menuName} (${item.calories}kcal)\n👉 ${item.reason}`
@@ -136,10 +225,9 @@ app.post('/get-recommendation', async (req, res) => {
 
         res.status(200).json({
             menuName: combinedTitle,
-            calories: safeList[0].calories, // 칼로리는 1위 기준
+            calories: safeList[0].calories,
             reason: combinedReason
         });
-
     } else {
         res.status(200).json({ menuName: "추천 불가", calories: 0, reason: "조건에 맞는 메뉴가 없습니다." });
     }
@@ -151,5 +239,5 @@ app.post('/get-recommendation', async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`🚀 Dieter Server listening on http://localhost:${port}`);
+  console.log(`🚀 Node.js Server listening on http://localhost:${port}`);
 });

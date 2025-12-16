@@ -44,8 +44,6 @@ const firebaseConfig = {
 
 // NOTE: 'firebaseConfig' 변수는 사용자 환경에서 제공되어야 합니다.
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'dieter-app';
-
-// --- 관리자 정보 설정 ---
 const ADMIN_EMAIL = 'admin@dieter.com';
 
 // --- Firebase Initialization ---
@@ -63,20 +61,10 @@ try {
 // --- STANDARD Recommended Daily Allowances (RDAs) - 성별에 따른 기본 권장량 설정 ---
 const STANDARD_RDA = {
   male: {
-    calories: 2500, // 남성 기준
-    protein: 65, 
-    fat: 78, 
-    carbohydrates: 300, 
-    sodium: 2300, 
-    sugar: 50, 
+    calories: 2500, protein: 65, fat: 78, carbohydrates: 300, sodium: 2300, sugar: 50, 
   },
   female: {
-    calories: 2000, // 여성 기준
-    protein: 50, 
-    fat: 65, 
-    carbohydrates: 250, 
-    sodium: 2000, 
-    sugar: 40, 
+    calories: 2000, protein: 50, fat: 65, carbohydrates: 250, sodium: 2000, sugar: 40, 
   }
 };
 
@@ -109,10 +97,8 @@ const Modal = ({ title, message, onClose }) => (
   );
   
 const DailySummaryContent = ({ totals, userGender }) => {
-    // 성별에 맞는 RDA 값 선택 (기본값은 male로 설정)
     const targetRDA = STANDARD_RDA[userGender] || STANDARD_RDA.male;
     
-    // 이 예시에서는 탄수화물, 단백질, 지방, 당류, 나트륨만 표시
     const nutItems = [
       { name: '칼로리', key: 'calories', rda: targetRDA.calories, unit: 'kcal' }, 
       { name: '탄수화물', key: 'carbohydrates', rda: targetRDA.carbohydrates, unit: 'g' }, 
@@ -120,12 +106,11 @@ const DailySummaryContent = ({ totals, userGender }) => {
       { name: '지방', key: 'fat', rda: targetRDA.fat, unit: 'g' }, 
       { name: '당류', key: 'sugar', rda: targetRDA.sugar, unit: 'g' },
       { name: '나트륨', key: 'sodium', rda: targetRDA.sodium, unit: 'mg' }, 
-    ].filter(item => item.key !== 'calories').map(item => ({ // 칼로리는 별도로 표시
+    ].filter(item => item.key !== 'calories').map(item => ({ 
       ...item,
       value: totals[item.key] || 0,
     }));
   
-    // 칼로리 별도 추출
     const calorieItem = STANDARD_RDA[userGender].calories;
 
     return (
@@ -165,7 +150,6 @@ const DailySummaryContent = ({ totals, userGender }) => {
     );
   };
   
-  
 const FoodList = ({ foodEntries }) => (
     <div className="p-0 mt-4">
       <h2 className="text-xl font-semibold text-gray-800 mb-4">오늘의 식사</h2>
@@ -196,7 +180,10 @@ const FoodList = ({ foodEntries }) => (
     </div>
   );
   
-const FoodInputForm = ({ textInput, setTextInput, handleTextInput, handleImageUpload, isLoadingImage }) => {
+const FoodInputForm = ({ textInput, setTextInput, handleTextInput, handleImageUpload, isLoadingImage, isLoadingText }) => {
+    
+    const isDisabled = isLoadingImage || isLoadingText;
+
     return (
       <div className="mt-6 p-4 bg-white rounded-xl shadow-inner border border-gray-200">
         <form onSubmit={handleTextInput} className="flex items-center space-x-2">
@@ -204,10 +191,9 @@ const FoodInputForm = ({ textInput, setTextInput, handleTextInput, handleImageUp
               type="text"
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
-              placeholder="오늘 먹은 음식을 텍스트로 입력하세요..."
-              // 🔴 수정 1-1: input에 마우스 올렸을 때 포커스 링 색상 변경 (focus:ring-teal-500은 그대로 유지)
-              className="flex-grow p-2 text-gray-800 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-              disabled={isLoadingImage}
+              placeholder="음식명 또는 '떡볶이 1인분'을 입력하세요."
+              className="flex-grow p-2 border border-gray-300 rounded-lg focus:ring-teal-500 focus:border-teal-500"
+              disabled={isDisabled} 
             />
             
             <input 
@@ -216,7 +202,7 @@ const FoodInputForm = ({ textInput, setTextInput, handleTextInput, handleImageUp
               className="sr-only" 
               accept="image/*" 
               onChange={(e) => handleImageUpload(e.target.files[0])} 
-              disabled={isLoadingImage} 
+              disabled={isDisabled} 
             />
             
             <label htmlFor="image-file-upload" className="cursor-pointer p-2 rounded-lg hover:bg-gray-100 transition-colors">
@@ -229,15 +215,23 @@ const FoodInputForm = ({ textInput, setTextInput, handleTextInput, handleImageUp
               )}
             </label>
             
-            <button type="submit" className="bg-teal-600 p-2 rounded-lg hover:bg-teal-700 transition-colors" disabled={isLoadingImage || !textInput.trim()}>
-              <svg className="w-6 h-6 transform rotate-90 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-              </svg>
+            <button 
+              type="submit" 
+              className={`p-2 rounded-lg transition-colors ${isDisabled || !textInput.trim() ? 'bg-gray-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'}`} 
+              disabled={isDisabled || !textInput.trim()} 
+            >
+              {isLoadingText ? (
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+              ) : (
+                <svg className="w-6 h-6 transform rotate-90 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+              )}
             </button>
         </form>
       </div>
     );
-  };
+};
   
 
 // --- MAIN APP ---
@@ -246,25 +240,24 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [foodEntries, setFoodEntries] = useState([]);
   
-  // [수정] userProfile에 username 필드 추가
   const [userProfile, setUserProfile] = useState({ 
     username: '', 
-    gender: 'male' // 초기값 male
+    gender: 'male' 
   }); 
   
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [error, setError] = useState(null);
   const [authError, setAuthError] = useState(null); 
   const [textInput, setTextInput] = useState(''); 
+
+  const [isLoadingText, setIsLoadingText] = useState(false); 
   
-  // ⭐️ 초기 화면을 'recommend'로 설정
   const [currentPage, setCurrentPage] = useState('recommend'); 
   
   const [recommendation, setRecommendation] = useState(null); 
   const [isLoadingRec, setIsLoadingRec] = useState(false);
   const recommendationTimerRef = useRef(null);
 
-  // 관리자 상태 추가
   const [isAdmin, setIsAdmin] = useState(false);
 
   // --- Auth Logic ---
@@ -274,15 +267,12 @@ export default function App() {
       setUser(currentUser);
       setIsAdmin(currentUser && currentUser.email === ADMIN_EMAIL);
       
-      // [추가] 로그인 시 Firestore에서 사용자 프로필 불러오기 (닉네임, 성별 등)
-
       if (currentUser) {
         try {
             const userDocRef = doc(db, `artifacts/${appId}/users/${currentUser.uid}`);
             const userDoc = await getDoc(userDocRef);
             if (userDoc.exists()) {
                 const data = userDoc.data();
-                // gender 값이 없으면 기본값 'male'을 사용
                 setUserProfile(prev => ({ ...prev, gender: data.gender || 'male', username: data.username || '' })); 
             } else {
                 setUserProfile(prev => ({ ...prev, gender: 'male' }));
@@ -291,7 +281,6 @@ export default function App() {
             console.error("프로필 불러오기 오류:", err);
         }
       } else {
-        // 로그아웃 시 프로필 초기화
         setUserProfile({ username: '', gender: 'male' });
       }
 
@@ -310,22 +299,18 @@ export default function App() {
     }
   };
 
-  // [수정] 회원가입 시 username 인자 추가
   const handleSignup = async (email, password, username) => {
     setAuthError(null);
     try {
-      // 1. Auth 사용자 생성
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // 2. Firestore에 사용자 프로필 문서 생성 (닉네임, 기본 성별 저장)
       await setDoc(doc(db, `artifacts/${appId}/users/${user.uid}`), {
         username: username,
         email: email,
-        gender: 'male', // 기본값 'male'
+        gender: 'male',
         createdAt: Timestamp.now()
       });
-      // onAuthStateChanged가 트리거되면서 state 업데이트 됨 (gender: 'male'로 설정될 것임)
     } catch (err) {
       setAuthError(err.message.replace('Firebase: ', ''));
       console.error(err);
@@ -345,17 +330,12 @@ export default function App() {
   };
 
   const handleUpdateProfile = async (newProfileData) => {
-    // UI 즉시 반영
     setUserProfile(prev => ({ ...prev, ...newProfileData }));
     
-    // Firestore 업데이트
     if (user) {
         try {
             const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}`);
-            // merge: true 옵션으로 기존 필드 유지하면서 업데이트
             await setDoc(userDocRef, newProfileData, { merge: true });
-            
-            // 프로필 업데이트 시 영양소 추천도 새로고침 (즉시 트리거)
             handleGetRecommendation(); 
 
         } catch (err) {
@@ -415,11 +395,42 @@ export default function App() {
   };
   
   const handleTextInput = async (e) => {
-      e.preventDefault();
-      if (!textInput.trim()) return;
-      console.log(`Sending text for analysis: ${textInput}`);
-      setTextInput('');
-  };
+    e.preventDefault();
+    if (!textInput.trim() || isLoadingImage || isLoadingText) return; 
+
+    setIsLoadingText(true); 
+    setError(null);
+    
+    const input = textInput.trim();
+    setTextInput(''); 
+    
+    try {
+        console.log(`📤 Sending text for analysis: ${input}`);
+        
+        const response = await fetch('https://schoolstuff-lj67.onrender.com/analyze-text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: input }), 
+        });
+
+        if (!response.ok) throw new Error('텍스트 분석 백엔드 실패');
+        
+        const foodData = await response.json();
+        
+        if (db && user) {
+            await addDoc(collection(db, `artifacts/${appId}/users/${user.uid}/foodEntries`), { 
+                ...foodData, 
+                timestamp: Timestamp.now() 
+            });
+            console.log("✅ Text Analysis & Record Success:", foodData.foodName);
+        }
+    } catch (err) { 
+        setError("텍스트 분석 및 기록에 실패했습니다: " + err.message); 
+        console.error("Text Analysis Error:", err);
+    } finally { 
+        setIsLoadingText(false); 
+    }
+};
 
   const handleReset = async () => {
     if (!db || !user) return;
@@ -457,7 +468,7 @@ export default function App() {
         body: JSON.stringify({ 
           foodList: foodListArray, 
           currentIntake: currentIntake,
-          gender: userProfile.gender // 성별 전달
+          gender: userProfile.gender 
         }),
       });
       
@@ -473,23 +484,19 @@ export default function App() {
   };
 
   // --- Auto-trigger Effect ---
-  // dailyTotals 또는 userProfile.gender가 변경될 때마다 자동 추천 재실행
   useEffect(() => {
     if (!isAuthReady || !user || isAdmin) return; 
     if (recommendationTimerRef.current) clearTimeout(recommendationTimerRef.current);
     
-    // Only auto-trigger if there is food logged
     if (foodEntries.length > 0) {
         setIsLoadingRec(true);
-        // The timer is now active!
         recommendationTimerRef.current = setTimeout(() => handleGetRecommendation(), 3000);
     } else {
-      // 식단이 없으면 추천 결과 및 로딩 상태 초기화
-      setRecommendation(null);
-      setIsLoadingRec(false);
+        setRecommendation(null);
+        setIsLoadingRec(false);
     }
     return () => clearTimeout(recommendationTimerRef.current);
-  }, [dailyTotals, userProfile.gender, isAuthReady, user, isAdmin]); // userProfile.gender 의존성 추가
+  }, [dailyTotals, userProfile.gender, isAuthReady, user, isAdmin]); 
 
   
   if (!isAuthReady) return <div className="flex justify-center items-center h-screen bg-white"><LoadingSpinner /></div>;
@@ -546,7 +553,12 @@ export default function App() {
                   <div className="space-y-2">
                     <h4 className="text-xl font-bold text-gray-800">{recommendation.menuName}</h4>
                     <p className="text-sm text-teal-600 font-semibold">{recommendation.calories} kcal</p>
-                    <p className="text-gray-600">{recommendation.reason}</p>
+                    
+                    {/* 🔥 [핵심 수정] 여기에 style 추가해서 줄바꿈(엔터) 적용됨 */}
+                    <p className="text-gray-600" style={{ whiteSpace: "pre-wrap", lineHeight: "1.6" }}>
+                        {recommendation.reason}
+                    </p>
+
                   </div>
               ) : (
                   <p className="text-gray-500 text-center py-8">
@@ -559,23 +571,20 @@ export default function App() {
                   
                   <button
                       onClick={handleGetRecommendation}
-                      // 식단이 없으면 버튼 비활성화
                       disabled={isLoadingRec || foodEntries.length === 0} 
                       className="flex-1 bg-teal-600 hover:bg-teal-700 text-teal-600 font-bold py-3 rounded-lg transition-colors shadow-md"
                   >
                     {isLoadingRec ? '분석 중...' : '맞춤 메뉴 추천받기'}
                   </button>
                   
-                  {/* 식단 입력하러 가기 버튼 추가 */}
                   <button
-                      onClick={() => setCurrentPage('home')} // 'home' 페이지(기존 식단 입력)로 이동
+                      onClick={() => setCurrentPage('home')}
                       className="text-teal-600 bg-white border border-teal-600 hover:bg-teal-50 font-bold py-3 px-4 rounded-lg transition-colors shadow-md"
                   >
                     식단 입력하러 가기
                   </button>
                 </div>
                 
-                {/* 식단 입력 안내 텍스트 추가 */}
                 {foodEntries.length === 0 && (
                   <p className="text-red-500 text-center text-sm font-medium mt-2">
                     입력된 식단이 없으면 추천이 불가해요
@@ -615,27 +624,25 @@ export default function App() {
               return (
                   <div className="space-y-8">
                     <div className="p-0">
-                           <h2 className="text-2xl font-bold text-gray-800 mb-4">오늘의 영양 상태 ({userProfile.gender === 'male' ? '남성' : '여성'} 기준)</h2>
-                           {/* userProfile.gender를 DailySummaryContent에 전달 */}
-                           <DailySummaryContent totals={dailyTotals} userGender={userProfile.gender} />
+                            <h2 className="text-2xl font-bold text-gray-800 mb-4">오늘의 영양 상태</h2>
+                            <DailySummaryContent totals={dailyTotals} userGender={userProfile.gender} />
                     </div>
 
                     <div className="p-0">
                       <h2 className="text-2xl font-bold text-gray-800 mb-4">식단 기록하기</h2>
                       <FoodInputForm 
-                            textInput={textInput} 
-                            setTextInput={setTextInput} 
-                            handleTextInput={handleTextInput} 
-                            handleImageUpload={handleImageUpload} 
-                            isLoadingImage={isLoadingImage} 
-                        />
+                        textInput={textInput} 
+                        setTextInput={setTextInput} 
+                        handleTextInput={handleTextInput} 
+                        handleImageUpload={handleImageUpload} 
+                        isLoadingImage={isLoadingImage} 
+                        isLoadingText={isLoadingText} 
+                      />
                     </div>
 
-                    {/* --- 리셋 버튼 --- */}
                     <div className="flex justify-center mt-8 pb-8">
                       <button
                           onClick={handleReset}
-                          
                           className="text-sm text-gray-400 hover:text-red-500 underline transition-colors hover:border-1 hover:border-teal-500 rounded p-1"
                       >
                           일일 식단 리셋
@@ -661,7 +668,7 @@ export default function App() {
                 <button
                     key={item.page}
                     onClick={() => setCurrentPage(item.page)}
-                   
+                    
                     className={`font-semibold transition-colors duration-150 ${
                         // 이 부분은 이미 'text-teal-600 border-b-2 border-teal-600'로 되어 있어 수정 없이 요청에 맞게 유지됩니다.
                         currentPage === item.page ? 'text-teal-600 border-b-2 border-teal-600' : 'hover:text-teal-500'
@@ -672,7 +679,6 @@ export default function App() {
             ))}
           </nav>
 
-          {/* --- 로그아웃 버튼 제거 --- */}
           <div className="w-16"></div> 
         </div>
       </header>
