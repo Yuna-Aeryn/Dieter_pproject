@@ -217,21 +217,22 @@ app.post('/get-recommendation', async (req, res) => {
     const recommendations = response.data; 
 	
     if (recommendations && recommendations.length > 0) {
-        const safeList = recommendations.map(item => ({
-			
-			// 🔥 FIX: Remove underscore and swap order
+        const safeList = recommendations.map(item => {  
+            
+            // 1. Clean the name (Logic we added)
             let cleanName = item.recommend_menu;
             if (cleanName && cleanName.includes('_')) {
                 cleanName = cleanName.split('_').reverse().join(' ');
             }
-			
-            return {
-                menuName: cleanName, // Use the cleaned name
+
+            // 2. Return the object explicitly
+            return {  
+                menuName: cleanName, 
                 calories: extractNumber(item.calorie),
                 reason: item.reason,
                 score: extractNumber(item.score)
             };
-        }));
+        }); 
 	
         const combinedTitle = safeList.map((item, idx) => `${idx+1}. ${item.menuName}`).join(' / ');
         const combinedReason = safeList.map((item, idx) => 
