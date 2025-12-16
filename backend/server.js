@@ -3,12 +3,13 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const OpenAI = require('openai'); // OpenAI 불러오기
-
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001; 
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://dieter01.netlify.app';
+const PYTHON_API_URL = process.env.PYTHON_API_URL || 'https://dieter-pproject-ai-server.onrender.com';
 
 // CORS 설정
-app.use(cors({ origin: 'https://dieter01.netlify.app' }));
+app.use(cors({ origin: FRONTEND_URL }));
 
 // --- OpenAI 설정 ---
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -203,7 +204,7 @@ app.post('/get-recommendation', async (req, res) => {
     console.log("📤 추천 요청 보냄 (Python)...");
     
     // 파이썬 서버 호출
-    const response = await axios.post('https://dieter-pproject-ai-server.onrender.com/recommend', {
+    const response = await axios.post('${PYTHON_API_URL}/recommend', {
       user_state: user_state,
       recent_food_names: foodList || []
     });
@@ -238,6 +239,6 @@ app.post('/get-recommendation', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`🚀 Node.js Server listening on http://localhost:${port}`);
+app.listen(port, '0.0.0.0', () => {
+  console.log(`🚀 Node.js Server listening on port ${port}`);
 });

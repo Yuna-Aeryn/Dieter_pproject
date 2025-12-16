@@ -1,7 +1,8 @@
 flask
 pandas
 numpy
-scikit-learn
+joblib
 xgboost
+scikit-learn
 openpyxl
 gunicorn

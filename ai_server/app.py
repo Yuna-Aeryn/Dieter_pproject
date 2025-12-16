@@ -7,13 +7,17 @@ import xgboost as xgb
 app = Flask(__name__)
 
 # --- 1. 모델과 데이터 로딩 ---
+# Get the directory where app.py is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 print("Loading AI Models & Data...")
 try:
-    food_df = pd.read_excel("./clean6.xlsx").fillna(0)
+    # Use os.path.join to construct paths
+    food_df = pd.read_excel(os.path.join(BASE_DIR, "clean6.xlsx")).fillna(0)
     food_df.columns = food_df.columns.str.replace(' ', '').str.strip()
     
-    scaler = joblib.load("./scaler.pkl")
-    model = joblib.load("./xgb_model.pkl")
+    scaler = joblib.load(os.path.join(BASE_DIR, "scaler.pkl"))
+    model = joblib.load(os.path.join(BASE_DIR, "xgb_model.pkl"))
     print("✅ Python Server Ready!")
 except Exception as e:
     print(f"❌ Error loading files: {e}")
@@ -127,4 +131,6 @@ def recommend():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    # CHANGE 2: Dynamic Port for Render/Heroku
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
