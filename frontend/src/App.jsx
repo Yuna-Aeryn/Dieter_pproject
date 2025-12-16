@@ -446,37 +446,47 @@ export default function App() {
     } catch (err) { setError("초기화 실패: " + err.message); }
   };
 
-  // --- Recommendation Handler ---
-  const handleGetRecommendation = async () => {
-    if (foodEntries.length === 0) return; 
+// --- Recommendation Handler ---
+const handleGetRecommendation = async () => {
+    if (isLoadingRec) return;
     
+    // [추가] 필수 데이터 확인: 프로필이나 성별 정보가 없으면 중단
+    if (!userProfile || !userProfile.gender) {
+        console.warn("사용자 프로필(성별) 정보가 없어 추천을 중단합니다.");
+        return;
+    }
+
     setIsLoadingRec(true);
     setRecommendation(null); 
     try {
-      // 1. Create Array of Strings (server expects foodList: string[])
       const foodListArray = foodEntries.map(f => `${f.foodName} (${f.calories}kcal)`);
       
-      // 2. Map 'carbohydrates' -> 'carbs' (Server expects currentIntake: { carbs: ... })
       const currentIntake = {
         ...dailyTotals,
         carbs: dailyTotals.carbohydrates 
       };
-      
-      // 사용자의 성별을 API에 전달
+
+      // 백엔드 요청
       const response = await fetch('https://schoolstuff-lj67.onrender.com/get-recommendation', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           foodList: foodListArray, 
-          currentIntake: currentIntake,
-          gender: userProfile.gender 
+          currentIntake: currentIntake, 
+          gender: userProfile.gender // 여기서 값이 있는지 확인됨
         }),
       });
       
+      if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || "서버 응답 실패");
+      }
+
       const data = await response.json();
       setRecommendation(data); 
 
     } catch (err) { 
-        setError("추천 메뉴를 가져오는 데 실패했습니다."); 
+        setError("추천 메뉴를 가져오는 데 실패했습니다: " + err.message); 
         console.error(err); 
     } finally { 
         setIsLoadingRec(false); 
@@ -689,3 +699,4 @@ export default function App() {
     </div>
   );
 }
+
