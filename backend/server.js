@@ -7,8 +7,8 @@ const OpenAI = require('openai'); // OpenAI 불러오기
 const app = express();
 const port = 3001;
 
-app.use(cors({ origin: 'http://localhost:5173' }));
-app.use(express.json({ limit: '10mb' }));
+// CORS 설정
+app.use(cors({ origin: 'https://dieter01.netlify.app' }));
 
 // --- OpenAI 설정 ---
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -203,7 +203,7 @@ app.post('/get-recommendation', async (req, res) => {
     console.log("📤 추천 요청 보냄 (Python)...");
     
     // 파이썬 서버 호출
-    const response = await axios.post('http://127.0.0.1:5000/recommend', {
+    const response = await axios.post('https://dieter-pproject-ai-server.onrender.com/recommend', {
       user_state: user_state,
       recent_food_names: foodList || []
     });

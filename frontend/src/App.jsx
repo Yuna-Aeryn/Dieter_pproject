@@ -20,6 +20,7 @@ import {
   addDoc,
   setDoc, 
   getDoc, 
+
   writeBatch,
   collection,
   query,
@@ -41,12 +42,14 @@ const firebaseConfig = {
   appId: "1:494620949863:web:70d3aca17dc51708c583c2"
 };
 
+// NOTE: 'firebaseConfig' 변수는 사용자 환경에서 제공되어야 합니다.
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'dieter-app';
 const ADMIN_EMAIL = 'admin@dieter.com';
 
 // --- Firebase Initialization ---
 let app, auth, db;
 try {
+  // 경고: firebaseConfig가 정의되어 있어야 합니다.
   app = initializeApp(firebaseConfig); 
   auth = getAuth(app);
   db = getFirestore(app);
@@ -55,7 +58,7 @@ try {
   console.error('Firebase initialization error:', e);
 }
 
-// --- STANDARD Recommended Daily Allowances (RDAs) ---
+// --- STANDARD Recommended Daily Allowances (RDAs) - 성별에 따른 기본 권장량 설정 ---
 const STANDARD_RDA = {
   male: {
     calories: 2500, protein: 65, fat: 78, carbohydrates: 300, sodium: 2300, sugar: 50, 
@@ -113,6 +116,7 @@ const DailySummaryContent = ({ totals, userGender }) => {
     return (
       <div className="bg-teal-100 p-4 rounded-xl shadow-lg text-gray-800 border border-teal-200">
         <div className="flex items-center mb-4">
+          {/* 칼로리 표시 */}
           <div className="bg-white text-teal-600 rounded-full w-20 h-20 flex flex-col items-center justify-center p-2 mr-4 font-bold shadow-md">
             <span className="text-xl font-bold">
               {Math.round(totals.calories)}
@@ -129,10 +133,12 @@ const DailySummaryContent = ({ totals, userGender }) => {
             return (
               <div key={item.name} className="flex flex-col">
                 <span className="font-semibold text-sm mb-1">{item.name}</span> 
+                {/* 현재 섭취량 / 권장량 표시 */}
                 <div className="text-xs text-gray-600 mb-1">{item.value.toFixed(0)}/{item.rda}{item.unit}</div> 
                 <div className="h-1 bg-teal-200 rounded-full">
                   <div 
                     className="h-1 rounded-full" 
+                    // 100% 초과 시 빨간색
                     style={{ width: `${barWidth}%`, backgroundColor: barWidth >= 100 ? '#f00' : '#48E28C' }} 
                   ></div>
                 </div>
@@ -375,7 +381,7 @@ export default function App() {
       reader.readAsDataURL(file);
       reader.onload = async () => {
         const base64ImageData = reader.result.split(',')[1];
-        const response = await fetch('http://localhost:3001/analyze-image', {
+        const response = await fetch('https://schoolstuff-lj67.onrender.com/analyze-image', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64: base64ImageData, mimeType: file.type }),
         });
@@ -401,7 +407,7 @@ export default function App() {
     try {
         console.log(`📤 Sending text for analysis: ${input}`);
         
-        const response = await fetch('http://localhost:3001/analyze-text', {
+        const response = await fetch('https://schoolstuff-lj67.onrender.com/analyze-text', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text: input }), 
@@ -447,14 +453,17 @@ export default function App() {
     setIsLoadingRec(true);
     setRecommendation(null); 
     try {
+      // 1. Create Array of Strings (server expects foodList: string[])
       const foodListArray = foodEntries.map(f => `${f.foodName} (${f.calories}kcal)`);
       
+      // 2. Map 'carbohydrates' -> 'carbs' (Server expects currentIntake: { carbs: ... })
       const currentIntake = {
         ...dailyTotals,
         carbs: dailyTotals.carbohydrates 
       };
       
-      const response = await fetch('http://localhost:3001/get-recommendation', {
+      // 사용자의 성별을 API에 전달
+      const response = await fetch('https://schoolstuff-lj67.onrender.com/get-recommendation', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           foodList: foodListArray, 
@@ -494,6 +503,7 @@ export default function App() {
 
   // --- Login Screen ---
   if (!user) {
+    // Pass the new handleSignup which now accepts username
     return <Login onLogin={handleLogin} onSignup={handleSignup} error={authError} />;
   }
   
@@ -523,6 +533,7 @@ export default function App() {
 
   // 🚀 User Render
 
+  // 네비게이션 아이템
   const navItems = [
     { name: '추천 메뉴', page: 'recommend' }, 
     { name: '식단 입력', page: 'home' }, 
@@ -659,6 +670,7 @@ export default function App() {
                     onClick={() => setCurrentPage(item.page)}
                     
                     className={`font-semibold transition-colors duration-150 ${
+                        // 이 부분은 이미 'text-teal-600 border-b-2 border-teal-600'로 되어 있어 수정 없이 요청에 맞게 유지됩니다.
                         currentPage === item.page ? 'text-teal-600 border-b-2 border-teal-600' : 'hover:text-teal-500'
                     }`}
                 >
