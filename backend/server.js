@@ -5,6 +5,8 @@ const axios = require('axios');
 const OpenAI = require('openai'); // OpenAI 불러오기
 const app = express();
 const port = process.env.PORT || 3001; 
+app.use(express.json({ limit: '50mb' })); // JSON 데이터 해석 & 용량 제한 늘리기
+app.use(express.urlencoded({ limit: '50mb', extended: true })); // URL 인코딩 데이터 해석
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://dieter01.netlify.app';
 const PYTHON_API_URL = process.env.PYTHON_API_URL || 'https://dieter-pproject-ai-server.onrender.com';
 
